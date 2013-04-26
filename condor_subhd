@@ -1,0 +1,106 @@
+#!/bin/bash
+#
+# condor_subhd
+#
+# created: 28.03.2013
+# by zinke
+#
+
+Usage() {
+cat << EOF
+
+    Usage: $0 <execut> [options]
+
+    OPTIONS:
+            -cpu    number of demanded CPUs (default: 1)
+            -mem    required memory usage (default: 2000)
+            -ini    initial directory (default: pwd)
+            -o      filename of the submit file
+            -sd     use shim_dmtcp for long lasting jobs
+
+            ###########################################################
+            ##   (c) wolf zinke (2013) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+
+EOF
+exit 1
+
+}
+ 
+if [ $# -lt 1 ]; then
+    Usage
+else
+    execut=$1;
+    shift
+fi
+ 
+#__________________________________________________________________________________________#
+inidir=`pwd`
+ncpu=1
+memuse=2000
+ostr=""
+do_shim=0
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+        -cpu)   ncpu=$2
+                shift 2
+                ;;
+        -mem)   memuse=$2
+                shift 2
+                ;;
+        -ini)   inidir=$2
+                shift 2
+                ;;
+         -sd)   do_shim=1
+                shift 
+                ;;
+          -o)   ostr="> $2"
+                shift 2
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+#__________________________________________________________________________________________#
+ 
+if [ $do_shim -eq 0 ]
+then
+
+eval "echo 'Executable = $execut
+Universe = vanilla
+initialdir = $inidir
+request_cpus = $ncpu
+request_memory = $memuse
+getenv = True
+notification = Never
+' $ostr"
+
+else
+
+eval "echo 'universe = vanilla
+executable = /usr/lib/condor/shim_dmtcp
+should_transfer_files = YES
+when_to_transfer_output = ON_EXIT_OR_EVICT
+kill_sig = 2
+output = \$(CLUSTER).\$(PROCESS).shimout
+error = \$(CLUSTER).\$(PROCESS).shimerr
+log = \$(CLUSTER).\$(PROCESS).log
+dmtcp_args = --log \$(CLUSTER).\$(PROCESS).shimlog --stdout \$(CLUSTER).\$(PROCESS).out --stderr \$(CLUSTER).\$(PROCESS).err
+dmtcp_env = DMTCP_TMPDIR=./;JALIB_STDERR_PATH=/dev/null;DMTCP_PREFIX_ID=\$(CLUSTER)_\$(PROCESS)
+initialdir = $inidir
+request_cpus = $ncpu
+request_memory = $memuse
+getenv = True
+' $ostr"
+
+fi

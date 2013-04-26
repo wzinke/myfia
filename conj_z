@@ -1,0 +1,141 @@
+#!/bin/bash
+#
+# conj_z
+#
+# created: 19.11.2010
+# by zinke
+#
+
+Usage() {
+cat << EOF
+
+    Usage: $0 <zstat1> <zstat2> [options]
+
+    Creates a conjunction of two zstats.
+    Testing the conjunction null works by creating a min z image, and making inference on it
+    just as if it were a regular z image.
+    Optional, this script tests the 'global' null hypothesis (no effects real). -> Not Working!!!
+    Based on the easythresh_conj script by T Nichols:
+    http://www2.warwick.ac.uk/fac/sci/statistics/staff/research/nichols/scripts/fsl/easythresh_conj.sh
+        > Valid Conjunction Inference with the Minimum Statistic.                            <
+        > Thomas Nichols, Matthew Brett, Jesper Andersson, Tor Wager & Jean-Baptiste Poline. <
+        > NeuroImage, 2005, 25(3), 653-660                                                   <
+
+    OPTIONS:
+            -o      output file name
+            -g      test the 'global' null hypothesis (not working!)
+            -m      mask image
+            -keep   do not delete temporary files
+
+            ###########################################################
+            ##   (c) wolf zinke (2010) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+EOF
+exit 1
+
+}
+
+
+if [ $# -lt 1 ]; then
+    Usage
+else
+    zstat1=$1;
+    zstat2=$2;
+    shift 2
+fi
+
+#__________________________________________________________________________________________#
+maskstr=""
+keep_temp=0
+ofl="`remove_ext $zstat1`_CONJ_`remove_ext $zstat2`"
+do_global=0
+get_mask=1
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+          -o)   ofl=$2
+                shift 2
+                ;;
+          -g)   do_global=1
+                shift
+                ;;
+          -m)   maskstr="-mas $2"
+                maskfl=$2
+                get_mask=0
+                shift 2
+                ;;
+       -keep)   keep_temp=1
+                shift
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+tmpdir=`tmpnam tmpCONJ`
+rm $tmpdir
+mkdir $tmpdir
+
+#__________________________________________________________________________________________#
+if [ $get_mask -eq 1 ]
+then
+    fslmaths $zstat1 -add $zstat2 -abs -bin $tmpdir/mask -odt char
+    maskstr="-mas $tmpdir/mask"
+    maskfl=$tmpdir/mask
+fi
+
+if [ $do_global -eq 0 ]
+then
+    fslmaths $zstat1 -min $zstat2 $maskstr $ofl
+#     fslmerge -t $tmpdir/zts $zstat1 $zstat2
+#     fslmaths $tmpdir/zts -Tmin $maskstr $ofl
+else
+    fslmaths $zstat1 $maskstr -ztop $tmpdir/pstat1
+    fslmaths $zstat2 $maskstr -ztop $tmpdir/pstat2
+
+    fslmaths $tmpdir/pstat1 -mul $tmpdir/pstat2 $tmpdir/mulp
+    NdtriDomainError=`fslmaths $tmpdir/mulp $maskstr -ptoz -nan $ofl`
+fi
+
+# estimate image smoothness
+SM1=`smoothest -z $zstat1 -m $maskfl`
+SM2=`smoothest -z $zstat2 -m $maskfl`
+
+VOLUME=`echo $SM1 | grep VOLUME | awk '{print $4}'`  # Same mask, so volume should be identical
+
+DLH1=`echo $SM1 | grep DLH | awk '{print $2}'`
+DLH2=`echo $SM2 | grep DLH | awk '{print $2}'`
+
+DLH=`Rcalc "max(c($DLH1,$DLH2))"`
+
+# DLH=`echo "( $DLH1 + $DLH2 ) / 2.0" | bc -l`
+# #  Take max of DLH's (worst roughness) - More conservative option
+# DLH=`echo "if ($DLH1 > $DLH2) $DLH1 else $DLH2" | bc -l`
+
+RESELS1=`echo $SM1 | grep RESELS | awk '{print $6}'`
+RESELS2=`echo $SM2 | grep RESELS | awk '{print $6}'`
+
+RESELS=`Rcalc "max(c($RESELS1,$RESELS2))"`
+
+# RESELS=`echo "( $RESELS1 + $RESELS2 ) / 2.0" | bc -l`
+# # Take max of RESELS (most conservative) - More conservative option
+# RESELS=`echo "if ($RESELS1 > $RESELS2) $RESELS1 else $RESELS2" | bc -l`
+smfl=`remove_ext ${ofl}`_smoothness
+echo "DLH $DLH" > $smfl
+echo "VOLUME $VOLUME" >> $smfl
+echo "RESELS $RESELS" >> $smfl
+
+#__________________________________________________________________________________________#
+
+if [ $keep_temp -eq 0 ]
+then
+    rm -r $tmpdir
+fi

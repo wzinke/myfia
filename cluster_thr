@@ -1,0 +1,194 @@
+#!/bin/bash
+#
+# cluster_thr
+#
+# created: 24.04.2010
+# by wolf
+#
+
+Usage() {
+cat << EOF
+
+    Usage: $0 [options]
+
+        makes a cluster correction of statistical z-maps.
+
+    OPTIONS:
+            -l      list of files that should be thresholded
+            -d      directory of files
+            -o      output directory
+            -z      threshold of z maps (default `ptoz 0.01`)
+            -p      cluster p-threshold for significance (default 0.01)
+            -conn   connectivity of voxels (default 26)
+            -pf     prefix
+            -sf     suffix
+            -out    output stem
+            -mask   mask images
+            -bck    specify background image for slice plotting
+            -keep   do not delete temporary files
+
+            ###########################################################
+            ##   (c) wolf zinke (2010) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+EOF
+exit 1
+
+}
+
+#__________________________________________________________________________________________#
+keep_temp=0
+get_mask=1
+do_plot=0
+pthr=0.01
+zthr=`ptoz 0.01`
+c=26
+fllst=""
+get_fl=1
+fl_dir=`pwd`
+odir=clust_thr
+prefix=''
+suffix=''
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+          -l)   fllst=$2
+                get_fl=0
+                shift 2
+                ;;
+          -d)   fl_dir=$2
+                shift 2
+                ;;
+          -o)   odir=$2
+                shift 2
+                ;;
+          -z)   zthr=$2
+                shift 2
+                ;;
+          -p)   pthr=$2
+                shift 2
+                ;;
+       -conn)   c=$2
+                shift 2
+                ;;
+         -sf)   suffix=$2
+                shift 2
+                ;;
+         -pf)   prefix=$2
+                shift 2
+                ;;
+       -mask)   maskfl=`remove_ext $2`
+                get_mask=0
+                shift 2
+                ;;
+        -bck)   bckfl=`remove_ext $2`
+                do_plot=1
+                shift 2
+                ;;
+       -keep)   keep_temp=1
+                shift
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+if [ ! -d $odir ]
+then
+    mkdir $odir
+fi
+
+tmpdir=`tmpnam tmpCLUSTERTHR`
+rm $tmpdir
+mkdir $tmpdir
+
+#__________________________________________________________________________________________#
+if [ $get_fl -eq 1 ]
+then
+    fllst=`ls -1 $fl_dir/*.nii.gz`
+fi
+
+printf "%24s %-10s %-8s %-8s %-8s %-10s %-8s %-8s %-8s \n" File Num_vxl p z num_active  minval maxval robmin robmax> $odir/p_info.dat
+printf "%24s %-10s %-8s %-8s %-8s %-10s %-8s %-8s %-8s \n" File Num_vxl p z num_active minval maxval robmin robmax
+
+# zthr=`ptoz $pthr`
+
+if [ $get_mask -eq 0 ]
+then
+    fslmaths $maskfl -abs -bin $tmpdir/mask.nii.gz
+fi
+
+for cfl in $fllst
+do
+    flnm=`basename $cfl`
+    flnm=`remove_ext $flnm`
+    onm=`echo $odir/${prefix}${flnm}${suffix}`
+
+    if [ $get_mask -eq 1 ]
+    then
+        fslmaths $cfl -abs -bin $tmpdir/mask.nii.gz
+    fi
+    num_vxl=`fslstats $tmpdir/mask.nii.gz -V | awk '{print $1}'`
+
+    fslmaths $cfl -mas $tmpdir/mask.nii.gz $tmpdir/thresh_zmap
+
+    smnm="`remove_ext ${cfl}`_smoothness"
+    if [ -e $smnm ]
+    then
+        SM=`cat $smnm`
+    else
+        SM=`smoothest -z $cfl --mask=$tmpdir/mask.nii.gz`
+    fi
+
+    DLH=`   echo $SM | awk '{print $2}'`
+    VOLUME=`echo $SM | awk '{print $4}'`
+    RESELS=`echo $SM | awk '{print $6}'`
+
+    cluster -i $tmpdir/thresh_zmap -t $zthr -p $pthr -d $DLH --volume=$VOLUME --othresh=$onm -o ${onm}_cluster_mask --opvals=${onm}_pvals --connectivity=$c --olmaxim=${onm}_lmax --mm --olmax=${onm}_lmax.txt --minclustersize > ${onm}_cluster.txt
+
+    num_active=`fslstats ${onm}_cluster_mask -V | awk '{print $1}'`
+
+    if [ $num_active -gt 0 ]
+    then
+        minmax=`fslstats $cfl -k $onm -R`
+        minval=`echo $minmax | awk '{print $1}'`
+        maxval=`echo $minmax | awk '{print $2}'`
+
+        robminmax=`fslstats $cfl -k $onm -r`
+        robminval=`echo $robminmax | awk '{print $1}'`
+        robmaxval=`echo $robminmax | awk '{print $2}'`
+
+        if [ $do_plot -eq 1 ]
+        then
+            vol_slicer ${bckfl} -stat $onm -statrng $zthr $robmaxval -thick -noside  -out ${onm}.png
+        fi
+    else
+        minval=0.0
+        maxval=0.0
+
+        robminval=0.0
+        robmaxval=0.0
+
+        if [ -e ${onm}.png ]
+        then
+            rm ${onm}.png
+        fi
+    fi
+
+    printf "%24s %-10d %-8.6f %-8.6f %-10d %-8.4f %-8.4f %-8.4f %-8.4f \n" $flnm $num_vxl $pthr $zthr $num_active $minval $maxval $robminval $robmaxval >> $odir/p_info.dat
+    printf "%24s %-10d %-8.6f %-8.6f %-10d %-8.4f %-8.4f %-8.4f %-8.4f \n" $flnm $num_vxl $pthr $zthr $num_active $minval $maxval $robminval $robmaxval
+done
+
+#__________________________________________________________________________________________#
+
+if [ $keep_temp -eq 0 ]
+then
+    rm -r $tmpdir
+fi

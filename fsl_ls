@@ -1,0 +1,10 @@
+#!/bin/bash
+#
+###########################################################
+##   (c) wolf zinke (2008) - part of the MaFIA toolbox   ##
+###########################################################
+
+echo Contents of $FSLDIR/bin:
+echo ""
+ls $FSLDIR/bin
+

@@ -1,0 +1,193 @@
+#!/bin/bash
+#
+# fdr_thr
+#
+# created: 24.04.2010
+# by wolf
+#
+
+Usage() {
+cat << EOF
+
+    Usage: $0 [options]
+
+        makes a FDR correction of statistical z-maps.
+
+    OPTIONS:
+            -l      list of files that should be thresholded
+            -d      directory of files
+            -o      output directory
+            -p      p-threshold for significance (default 0.0001)
+            -con    user conservarive fdr
+            -pf     prefix
+            -sf     suffix
+            -out    output stem
+            -mask   mask images
+            -bck    specify background image for slice plotting
+            -keep   do not delete temporary files
+
+            ###########################################################
+            ##   (c) wolf zinke (2010) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+EOF
+exit 1
+
+}
+
+#__________________________________________________________________________________________#
+keep_temp=0
+get_mask=1
+do_plot=0
+pthr=0.0001
+fllst=""
+get_fl=1
+fl_dir=`pwd`
+odir=fdr_thr
+prefix=''
+suffix=''
+constr=''
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+          -l)   fllst=$2
+                get_fl=0
+                shift 2
+                ;;
+          -d)   fl_dir=$2
+                shift 2
+                ;;
+          -o)   odir=$2
+                shift 2
+                ;;
+          -p)   pthr=$2
+                shift 2
+                ;;
+         -sf)   suffix=$2
+                shift 2
+                ;;
+         -pf)   prefix=$2
+                shift 2
+                ;;
+        -con)   constr="--conservative"
+                shift
+                ;;
+       -mask)   maskfl=`remove_ext $2`
+                get_mask=0
+                shift 2
+                ;;
+        -bck)   bckfl=`remove_ext $2`
+                do_plot=1
+                shift 2
+                ;;
+       -keep)   keep_temp=1
+                shift
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+if [ ! -d $odir ]
+then
+    mkdir $odir
+fi
+
+tmpdir=`tmpnam tmpFDRTHR`
+rm $tmpdir
+mkdir $tmpdir
+
+#__________________________________________________________________________________________#
+if [ $get_fl -eq 1 ]
+then
+    fllst=`ls -1 $fl_dir/*.nii.gz`
+fi
+
+printf "%24s %-10s %-8s %-8s %-8s %-10s %-8s %-8s %-8s %-8s \n" File Num_vxl p fdr-P z_corr num_active minval maxval robmin robmax > $odir/p_info.dat
+printf "%24s %-10s %-8s %-8s %-8s %-10s %-8s %-8s %-8s %-8s \n" File Num_vxl p fdr-P z_corr num_active minval maxval robmin robmax
+
+zthr=`ptoz $pthr`
+
+if [ $get_mask -eq 0 ]
+then
+    fslmaths $maskfl -abs -bin $tmpdir/mask.nii.gz
+fi
+
+for cfl in $fllst
+do
+    flnm=`basename $cfl`
+    flnm=`remove_ext $flnm`
+    onm=`echo $odir/${prefix}${flnm}${suffix}`
+
+    if [ $get_mask -eq 1 ]
+    then
+        fslmaths $cfl -abs -bin $tmpdir/mask.nii.gz
+    fi
+    num_vxl=`fslstats $tmpdir/mask.nii.gz -V | awk '{print $1}'`
+
+    fslmaths $cfl -ztop $tmpdir/thresh_pmap
+
+    probthresh=`fdr -i $tmpdir/thresh_pmap -m $tmpdir/mask.nii.gz -q $pthr $constr | grep "\."`
+
+    if [ "X$probthresh" == "X" ]
+    then
+        probthresh=0
+        zcorr=NA
+        fslmaths $cfl -mul 0 $onm
+        num_active=0
+    else
+        zcorr=`ptoz $probthresh`
+        fslmaths $cfl -mas $tmpdir/mask.nii.gz -thr $zcorr $onm
+        num_active=`fslstats $onm -V | awk '{print $1}'`
+    fi
+
+    if [ $num_active -gt 0 ]
+    then
+        minmax=`fslstats $cfl -k $onm -R`
+        minval=`echo $minmax | awk '{print $1}'`
+        maxval=`echo $minmax | awk '{print $2}'`
+
+        robminmax=`fslstats $cfl -k $onm -r`
+        robminval=`echo $robminmax | awk '{print $1}'`
+        robmaxval=`echo $robminmax | awk '{print $2}'`
+
+        if [ $do_plot -eq 1 ]
+        then
+            if which latex2html >/dev/null; then
+                vol_slicer ${bckfl} -stat $onm -statrng $robminval $robmaxval -thick -noside  -out ${onm}.png
+            else
+                overlay 1 0 ${bckfl}.nii.gz -a $onm $robminval $robmaxval $tmpdir/rendered
+                slice_set $tmpdir/rendered -u -s 2 -out ${onm}.png
+            fi
+        fi
+    else
+        minval=0
+        maxval=0
+
+        robminval=0
+        robmaxval=0
+    fi
+
+    if [ $zcorr == NA ]
+    then
+        printf "%24s %-10d %-8.6f %-8.6f %-8s %-10d %-8.4f %-8.4f %-8.4f %-8.4f \n" $flnm $num_vxl $pthr $probthresh $zcorr $num_active $minval $maxval $robminval $robmaxval >> $odir/p_info.dat
+        printf "%24s %-10d %-8.6f %-8.6f %-8s %-10d %-8.4f %-8.4f %-8.4f %-8.4f \n" $flnm $num_vxl $pthr $probthresh $zcorr $num_active $minval $maxval $robminval $robmaxval
+    else
+        printf "%24s %-10d %-8.6f %-8.6f %-8.6f %-10d %-8.4f %-8.4f %-8.4f %-8.4f \n" $flnm $num_vxl $pthr $probthresh $zcorr $num_active $minval $maxval $robminval $robmaxval >> $odir/p_info.dat
+        printf "%24s %-10d %-8.6f %-8.6f %-8.6f %-10d %-8.4f %-8.4f %-8.4f %-8.4f \n" $flnm $num_vxl $pthr $probthresh $zcorr $num_active $minval $maxval $robminval $robmaxval
+    fi
+done
+
+#__________________________________________________________________________________________#
+
+if [ $keep_temp -eq 0 ]
+then
+    rm -r $tmpdir
+fi

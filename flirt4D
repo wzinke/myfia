@@ -1,0 +1,216 @@
+#!/bin/bash
+#
+# flirt4D
+#
+# created: 15.10.2011
+# by zinke
+#
+
+Usage() {
+cat << EOF
+
+    Usage: $0 <infl> [options]
+
+        Apply flirt on a 4D data set. If a directory with .mat files is specified,
+        the transformations are applied volumewise. If other single transformation
+        matrices are specified, they will be concatenated and then applied.
+        It is assumed that motion correction is always carried out first, before
+        any subsequent coregistrations are done. Hence concatenation starts with
+        the matrices found in the *.mat directory.
+        Yet it is not implemented to combine two volumewise sets of transformations.
+
+    OPTIONS:
+            -ref    file specifying the reference space (default is input file)
+            -iso    use the reference space, but rescale it to this isometric voxelsize
+            -dir    directory with transformation matrices
+            -o      name of the output file
+            -ip     interpolation (default: trilinear)
+            -con    transformation matrix to concatenate
+            -omat   name of directory with concatenated matrices (deleted if not specified)
+            -keep   do not delete temporary files
+
+            ###########################################################
+            ##   (c) wolf zinke (2011) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+EOF
+exit 1
+
+}
+
+if [ $# -lt 1 ]; then
+    Usage
+else
+    infl=`remove_ext $1`
+    shift
+fi
+
+#__________________________________________________________________________________________#
+tmpdir=`tmpnam tmp_flirt4D`
+rm $tmpdir
+
+def_matdir=1
+reffl=$infl
+keep_tmp=0
+concat_mats=""
+do_concat=0
+ofl=${infl}_flirt4D
+do_rescale=0
+ipstr=trilinear
+volwise=0
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+           -o)  ofl=$2
+                shift 2
+                ;;
+         -dir)  matdir=$2
+                volwise=1
+                shift 2
+                ;;
+         -ref)  reffl=$2
+                shift 2
+                ;;
+         -con)  concat_mats="$concat_mats $2"
+                do_concat=1
+                shift 2
+                ;;
+         -iso)  vxlsz=$2
+                do_rescale=1
+                shift 2
+                ;;
+          -ip)  ipstr=$2
+                shift 2
+                ;;
+        -omat)  omat=$2
+                def_matdir=0
+                shift 2
+                ;;
+        -keep)  keep_tmp=1
+                shift
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+if [ -d $tmpdir ]
+then
+   rm -r $tmpdir    # delete whole directory
+fi
+mkdir $tmpdir
+
+if [ $volwise -eq 1 ]
+then
+    if [ $def_matdir -eq 1 ]
+    then
+        omat=$tmpdir/omat.mat
+    fi
+
+    if [ $volwise -eq 1 ]
+    then
+        if [ -d $omat ]
+        then
+            rm -r $omat
+        fi
+        mkdir $omat
+    fi
+fi
+
+if [ $do_concat -eq 1 ]
+then
+    numconc=0
+    for ccon in $concat_mats
+    do
+        numconc=$(($numconc+1))
+    done
+fi
+
+if [ $do_rescale -eq 1 ]
+then
+    hd_volrescale $reffl  -i $vxlsz -o $tmpdir/ref_vol
+    reffl=$tmpdir/ref_vol
+fi
+
+#__________________________________________________________________________________________#
+
+if [ $(($do_concat+$volwise)) -eq 0 ]
+then
+    echo "ERROR: No transformation matrix specified -> Nothing to do!"
+    Usage
+fi
+
+if [ $volwise -eq 1 ]
+then
+    matlst=`ls -1 $matdir`
+
+    mkdir $tmpdir/vols
+    fslsplit $infl $tmpdir/vols/vol_ -t
+    vol_lst=`ls -1 $tmpdir/vols/vol_*`
+    declare -a vols=($vol_lst)
+
+    vcnt=0
+    mc2_lst=""
+    for curr_mat in $matlst
+    do
+        cvol=`basename ${vols[$vcnt]}`
+
+#        echo "$vcnt    $cvol    $curr_mat    mc2_$cvol"
+        if [ $do_concat -eq 1 ]
+        then
+            numconc=0
+            lastcon=$matdir/$curr_mat
+            for ccon in $concat_mats
+            do
+                numconc=$(($numconc+1))
+                tmpmat=$tmpdir/omat_$numconc.mat
+                convert_xfm -omat $tmpmat -concat $ccon $lastcon
+                lastcon=$tmpmat
+            done
+            cp $tmpmat $omat/vol_$vcnt
+        else
+            cp $curr_mat  $omat/vol_$vcnt
+        fi
+
+        flirt -in ${vols[$vcnt]} -ref $reffl -o $tmpdir/vols/mc2_$cvol -init $omat/vol_$vcnt -applyxfm -interp $ipstr   -usesqform
+
+        vcnt=$(($vcnt+1))
+
+        mc2_lst="$mc2_lst $tmpdir/vols/mc2_$cvol"
+    done
+
+    fslmerge -t $ofl $mc2_lst
+
+else
+    if [ $numconc -gt 1 ]
+    then
+        cp $concat_mats $omat
+    else
+        numconc=0
+        for ccon in $concat_mats
+        do
+            numconc=$(($numconc+1))
+            if [ $numconc -gt 1 ]
+            then
+                tmpmat=$tmpdir/omat_$numconc.mat
+                convert_xfm -omat $tmpmat -concat $ccon $lastcon
+            fi
+            lastcon=$ccon
+        done
+        cp $tmpmat $omat
+    fi
+    flirt -in $infl -ref $reffl -init $omat -applyxfm -o $ofl
+fi
+
+#----------------------------------------------------------------------#
+if [ $keep_tmp -eq 0 ]
+then
+    rm -r $tmpdir
+fi

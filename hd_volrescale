@@ -1,0 +1,117 @@
+#!/bin/bash
+#
+# hd_volrescale
+#
+# created: 13.10.2011
+# by zinke
+#
+
+Usage() {
+cat << EOF
+
+    Usage: $0 <flnm> [options]
+
+        Creates a new header file that covers (roughly) the same volume
+        of a given 3D image, but sets it to a different voxel size
+
+    OPTIONS:
+            -f      use second input file to derive voxel size
+            -i      use isometric voxel size
+            -d      specify size for each dimension
+            -o      name of the rescaled header file
+
+            ###########################################################
+            ##   (c) wolf zinke (2011) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+EOF
+exit 1
+
+}
+
+if [ $# -lt 1 ]; then
+    Usage
+else
+    flnm=`remove_ext $1`
+    shift
+fi
+
+#__________________________________________________________________________________________#
+######
+sethdval()
+{
+tmphd=`tmpnam tmp_valxcng`
+rm $tmphd
+    valln=`cat $1 | grep "$2 =" | head -n 1`
+    nvxchng=`echo "sed -e \"s/$valln/  $2 = '$3'/g\" $1 > $tmphd"`
+#  echo $nvxchng
+    eval $nvxchng
+    mv $tmphd $1
+}
+
+ofl=${flnm}_rs
+
+tmpfl=`tmpnam tmp_HDrs`
+rm $tmpfl
+
+#__________________________________________________________________________________________#
+use_ref=0
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+          -i)   Xdim=$2 ; Ydim=$2 ; Zdim=$2
+                shift 2
+                ;;
+          -f)   reffl=$2
+                Xdim=`fslval $reffl pixdim1`
+                Ydim=`fslval $reffl pixdim2`
+                Zdim=`fslval $reffl pixdim3`
+                use_ref=1
+                shift 2
+                ;;
+          -d)   Xdim=$2 ; Ydim=$3 ; Zdim=$4
+                shift 4
+                ;;
+          -o)   ofl=$2
+                shift 2
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+#__________________________________________________________________________________________#
+
+Xcalcstr="`fslval $flnm dim1` * `fslval $flnm pixdim1`"
+fovX=`echo "$Xcalcstr" | bc -l`
+Ycalcstr="`fslval $flnm dim2` * `fslval $flnm pixdim2`"
+fovY=`echo "$Ycalcstr" | bc -l`
+Zcalcstr="`fslval $flnm dim3` * `fslval $flnm pixdim3`"
+fovZ=`echo "$Zcalcstr" | bc -l`
+
+Xcnt=`echo "$fovX / $Xdim + 0.5" | bc -l | xargs printf "%1.0f"`
+Ycnt=`echo "$fovY / $Ydim + 0.5" | bc -l | xargs printf "%1.0f"`
+Zcnt=`echo "$fovZ / $Zdim + 0.5" | bc -l | xargs printf "%1.0f"`
+
+# if [ $use_ref -eq 0 ]
+# then
+   fslcreatehd $Xcnt $Ycnt $Zcnt 1 $Xdim $Ydim $Zdim 1 0 0 0 16  $ofl
+# else
+#     fslhd -x $reffl > $tmpfl
+#     sethdval $tmpfl nx $Xcnt
+#     sethdval $tmpfl ny $Ycnt
+#     sethdval $tmpfl nz $Zcnt
+# #     sethdval $tmpfl header_filename `basename ${ofl}.nii.gz`
+# #     sethdval $tmpfl  image_filename `basename ${ofl}.nii.gz`
+# #     sethdval $tmpfl dx $Xdim
+# #     sethdval $tmpfl dy $Ydim
+# #     sethdval $tmpfl dz $Zdim
+#     fslcreatehd  $tmpfl $ofl
+#  rm $tmpfl
+# fi

@@ -1,0 +1,164 @@
+#!/bin/bash
+#
+
+Usage() {
+cat << EOF
+
+    Usage: fsl_mcpar <MatDir> [options]
+
+           writes co-registration parameter to a list
+
+    OPTIONS:
+            -out        filename for motion parameter list
+            -hdr        print header line
+            -corr       perform baseline correction of all parameter
+            -flnm       writes filenames of the transformation matrices files
+
+            ###########################################################
+            ##   (c) wolf zinke (2008) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+EOF
+    exit 1
+}
+
+if [ $# -lt 1 ]; then
+    Usage
+else
+    wdir=$1
+    shift
+fi
+
+if [ ! -d "$wdir" ]
+then
+    echo "ERROR: Directory <$wdir> does not exist!"
+    exit 1
+fi
+
+#----------------------------------------------------------------------#
+# define default parameter
+wrt_fl=0
+wrhdr=0
+corrpar=0
+wrtflnm=0
+outnm=${wdir}.parlst
+
+# get options
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+        -out)   outnm=$2
+                shift 2
+                ;;
+        -hdr)   wrhdr=1
+                shift
+                ;;
+        -corr)  corrpar=1
+                shift
+                ;;
+       -flnm)   wrtflnm=1
+                shift
+                ;;
+          -*)   Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+#fllst=`ls ${wdir}*.mat`
+
+fllst=`ls ${wdir} -1`
+# echo "$fllst"
+
+cnt=0
+for cfl in $fllst
+do
+    cnt=$(($cnt+1))
+done
+
+if [ $cnt -eq 0 ]
+then
+    echo "ERROR: No transformation files found in ${wdir}!"
+    exit 1
+fi
+
+if [ $wrt_fl -eq 1 ]
+then
+    echo "file x_rot y_rot z_rot x_tra y_tra z_tra x_sca y_sca z_sca xy_skew xz_skew yz_skew avrg_scale" > tmp_pars
+else
+    echo "x_rot y_rot z_rot x_tra y_tra z_tra x_sca y_sca z_sca xy_skew xz_skew yz_skew avrg_scale" > tmp_pars
+fi
+
+for mat_fl in $fllst
+do
+    cnt=$(($cnt+1))
+
+    avscale --allparams ${wdir}/$mat_fl > tmp_parmat
+
+    curr_rot=`cat tmp_parmat | grep = | grep Rotation     | cut -d= -f2`
+    curr_tra=`cat tmp_parmat | grep = | grep Translations | cut -d= -f2`
+    curr_sca=`cat tmp_parmat | grep Scales  | cut -d= -f2`
+    curr_ske=`cat tmp_parmat | grep Skews   | cut -d= -f2`
+    curr_avr=`cat tmp_parmat | grep Average | cut -d= -f2`
+
+    if [ $wrtflnm -eq 1 ]
+    then
+        echo "$mat_fl ${curr_rot}${curr_tra}${curr_sca}${curr_ske}${curr_avr}" >> tmp_pars
+    else
+        echo "${curr_rot}${curr_tra}${curr_sca}${curr_ske}${curr_avr}" >> tmp_pars
+    fi
+done
+
+rm tmp_parmat
+
+if [ $corrpar -eq 1 ]
+then
+
+    if [ $wrhdr -eq 0 ]
+    then
+        colnm=F
+    else
+        colnm=T
+    fi
+
+    funcal="mcpar=read.table('tmp_pars',header=T);
+            mcpar\$x_rot=mcpar\$x_rot - median(mcpar\$x_rot,na.rm=T)
+            mcpar\$y_rot=mcpar\$y_rot - median(mcpar\$y_rot,na.rm=T)
+            mcpar\$z_rot=mcpar\$z_rot - median(mcpar\$z_rot,na.rm=T)
+            mcpar\$x_tra=mcpar\$x_tra - median(mcpar\$x_tra,na.rm=T)
+            mcpar\$y_tra=mcpar\$y_tra - median(mcpar\$y_tra,na.rm=T)
+            mcpar\$z_tra=mcpar\$z_tra - median(mcpar\$z_tra,na.rm=T)
+            mcpar\$displace=sqrt(mcpar\$x_tra^2 + mcpar\$y_tra^2 + mcpar\$z_tra^2)
+            mcpar\$x_sca=mcpar\$x_sca - median(mcpar\$x_sca,na.rm=T)
+            mcpar\$y_sca=mcpar\$y_sca - median(mcpar\$y_sca,na.rm=T)
+            mcpar\$z_sca=mcpar\$z_sca - median(mcpar\$z_sca,na.rm=T)
+            mcpar\$xy_skew=mcpar\$xy_skew - median(mcpar\$xy_skew,na.rm=T)
+            mcpar\$xz_skew=mcpar\$xz_skew - median(mcpar\$xz_skew,na.rm=T)
+            mcpar\$yz_skew=mcpar\$yz_skew - median(mcpar\$yz_skew,na.rm=T)
+            write.table(mcpar, file='$outnm',row.names=F,col.names=$colnm); q();"
+
+
+    echo "$funcal" | R --vanilla --slave
+else
+    if [ $wrhdr -eq 0 ]
+    then
+        cnt=0
+        while read line
+        do
+            cnt=$(($cnt+1))
+            if [ $cnt -eq 1 ]
+            then
+                echo -n "" > $outnm
+                continue
+            fi
+            echo $line >> $outnm
+        done < tmp_pars
+    else
+        cp -f tmp_pars $outnm
+    fi
+fi
+
+rm tmp_pars

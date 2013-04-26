@@ -1,0 +1,107 @@
+#!/bin/bash
+#
+# feat_sweep
+#
+# created: 07.09.2009
+# by zinke
+#
+#__________________________________________________________________________________________#
+
+### ! BE CAREFUL: REMOVES PERMANENTLY FILES IN YOUR FEAT DIRECTORIES!
+
+feat_dirs=`ls -1 -d *.feat 2>/dev/null`
+
+cwd=`pwd`
+
+for cfeat in $feat_dirs
+do
+    echo "sweeping $cfeat"
+    cd $cfeat
+
+    thresh_nii=`ls -1 | grep  thresh_ | grep .nii.gz`
+    if [ "x$thresh_nii" != "x" ]
+    then
+        rm $thresh_nii
+    fi
+
+    old_dir=`ls -1 | grep old`
+    if [ "x$old_dir" != "x" ]
+    then
+        rm -r $old_dir
+    fi
+
+    reg_dir=`ls -1 | grep reg-`
+    if [ "x$reg_dir" != "x" ]
+    then
+        rm -r $reg_dir
+    fi
+
+    reg_dir=`ls -1 | grep reg_standard`
+    if [ "x$reg_dir" != "x" ]
+    then
+        rm -r $reg_dir
+    fi
+
+    core_ls=`ls -1 | grep core`
+    if [ "x$core_ls" != "x" ]
+    then
+        rm $core_ls
+    fi
+
+    gfeat_ls=`ls -1d *.gfeat 2>/dev/null`
+    if [ "x$gfeat_ls" != "x" ]
+    then
+        for cgfeat in $gfeat_ls
+        do
+            cd $cgfeat
+            feat_sweep
+            cd ..
+        done
+    fi
+
+    ppm_fls=`ls -1 *.ppm 2>/dev/null`
+    if [ "x$ppm_fls" != "x" ]
+    then
+        rm  $ppm_fls
+    fi
+
+    res_fls=`ls -1 stats/res4d.* 2>/dev/null`
+    if [ "x$res_fls" != "x" ]
+    then
+        rm  $res_fls
+    fi
+
+    corr_fls=`ls -1 stats/corrections.* 2>/dev/null`
+    if [ "x$corr_fls" != "x" ]
+    then
+        rm  $corr_fls
+    fi
+
+    neff_fls=`ls -1 stats/neff*.* 2>/dev/null`
+    if [ "x$neff_fls" != "x" ]
+    then
+        rm  $neff_fls
+    fi
+
+
+
+#     if [ -d reg ]
+#     then
+#         cd reg
+#
+#         reg_nii=`ls -1 *.nii.gz`
+#         if [ "x$reg_nii" != "x" ]
+#         then
+#             rm $reg_nii
+#         fi
+#
+#         cd ..
+#     fi
+
+    cd $cwd
+
+done
+
+
+#__________________________________________________________________________________________#
+

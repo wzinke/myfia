@@ -1,0 +1,40 @@
+#!/bin/bash
+#
+
+Usage() {
+cat << EOF
+
+    Usage: $0 <par_fl> <out_fl>
+
+            Plots motion correction parameters from an ascii file and save the plots as eps (<out_fl>)
+            This script uses R for plotting. It can distinguish between mcflirt and 3dvolreg files.
+
+            ###########################################################
+            ##   (c) wolf zinke (2008) - part of the MaFIA toolbox   ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+EOF
+exit 1
+}
+
+#----------------------------------------------------------------------#
+if [ $# -lt 1 ]
+then
+    Usage
+else
+    par_fl=$1
+fi
+
+if [ $# -lt 2 ]
+then
+    outfl=${par_fl}
+else
+    outfl=$2
+fi
+
+
+pdir=`dirname $(which $0)`
+
+echo "source('$pdir/mc_plots.r'); mc.plots('${par_fl}','${outfl}'); q()" | R --vanilla --slave
+rm Rplots.pdf

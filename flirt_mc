@@ -1,0 +1,347 @@
+#!/bin/bash
+#
+# use flirt for motion correction
+
+Usage() {
+cat << EOF
+
+    Usage: flirt_mc <infile> [options]
+
+           This function uses flirt for motion correction. Each volume is co-registered to a reference scan.
+
+    OPTIONS:
+            -out        basename for the data output
+            -ref        reference for coregistration (use a number or a file)
+            -dof        degrees of freedom (default: 12 parameter affine transformation)
+                        (numbers of transformation parameter, i.e. 3, 6, 7, 9 or 12)
+            -rot_tol    angle for all 3 axis that is used for the search (-rot_tol:rot_tol, default: 5)
+            -cost       cost function (corratio,mutualinfo,normcorr,normmi,leastsq)
+                        recommended: <corratio> for intra- and intermodal (default)
+            -inmask     weighting mask for the input image, unless specified no weightning will be done
+                        (use 'thr' or 'bet' as option)
+            -refmask    weighting mask for the reference image, unless specified no weightning will be done
+            -rob        use robust betting on each volume (time consuming!)
+                        (use 'thr' or 'bet' as option, or specify a mask file)
+            -ip         interpolation (trilinear,nearestneighbour,sinc); default: trilinear
+            -sm         use smoothing with fwhm given here prior coregistration
+            -init       use transformationmatrix of previous volume to initialize the following
+            -final      coregister mean image of motion corrected series
+            -tmp        temporary directory where single 3D files are saved
+            -keep       don't delete temporary files when finished
+            -resample   resamples volumes to the size of the reference image
+            -rsmpl_hdr  resamples data to image size given by this header file (ignores -resample)
+
+            ###########################################################
+            ##   (c) wolf zinke (2009) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+EOF
+    exit 1
+}
+
+if [ $# -lt 1 ]; then
+    Usage
+else
+    flnm=`remove_ext $1`;
+    shift
+fi
+
+#----------------------------------------------------------------------#
+# define default parameter
+mask_thr=15
+outnm=${flnm}_mc
+dof=12
+rot_tol=3
+do_refmask=0
+do_inmask=0
+do_init=0
+do_final=0
+tmpdir=`tmpnam tmpMC`
+rm $tmpdir
+keep_tmp=0
+costfun="corratio"
+ref=0
+ip="trilinear"
+sincwd=5
+do_rsmpl=0
+sm_fwhm=0
+do_hdr=0
+robust_bet=0
+
+#----------------------------------------------------------------------#
+# get options
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+        -out)   outnm=$2
+                shift 2
+                ;;
+        -dof)   dof=$2
+                shift 2
+                ;;
+        -ref)   ref=$2
+                shift 2
+                ;;
+    -refmask)   refmask=$2
+                do_refmask=1
+                shift 2
+                ;;
+     -inmask)   inmask=$2
+                do_inmask=1
+                shift 2
+                ;;
+       -cost)   costfun=$2
+                shift 2
+                ;;
+    -rot_tol)   rot_tol=$2
+                shift 2
+                ;;
+   -resample)   do_rsmpl=1
+                shift
+                ;;
+  -rsmpl_hdr)   rsmpl_hdr=$2
+                do_hdr=1
+                shift 2
+                ;;
+         -ip)   ip=$2
+                shift 2
+                ;;
+         -sm)   sm_fwhm=$2
+                shift 2
+                ;;
+        -rob)   robust_bet=1
+                shift
+                ;;
+       -init)   do_init=1
+                shift
+                ;;
+      -final)   do_final=1
+                shift
+                ;;
+        -tmp)   tmpdir=$2
+                shift 2
+                ;;
+       -keep)   keep_tmp=1
+                shift
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+if [ ! -e ${rsmpl_hdr}* ]
+then
+    echo "ERROR: reference header $rsmpl_hdr does not exist!"
+    exit
+fi
+
+#----------------------------------------------------------------------#
+# check whether directory allready exists
+if [ -d $tmpdir ]
+then
+   rm -r $tmpdir    # delete whole directory
+fi
+
+mkdir $tmpdir;
+
+#----------------------------------------------------------------------#
+# split 4D into series of 3D volumes
+fslsplit $flnm $tmpdir/vol_ -t
+
+#----------------------------------------------------------------------#
+# Get list of existing volumes
+vol_lst=`ls -1 $tmpdir/vol_*`
+
+#----------------------------------------------------------------------#
+# create the directory with the transformation matrices
+if [ -d ${outnm}.mat ]
+then
+   rm -r ${outnm}.mat    # delete whole directory
+fi
+
+mkdir ${outnm}.mat
+
+#----------------------------------------------------------------------#
+# get the reference image
+reffl=${tmpdir}/ref
+refweight=${tmpdir}/refmask
+if [ -e "$ref" ]
+then
+    imcp $ref $reffl              # copy reference into temp directory
+else
+    fslroi $datfl $reffl $ref 1   # extract reference volume
+    if [ $sm_fwhm != 0 ]
+    then
+        krnl=`fwhm2sigma $sm_fwhm`
+        fslmaths $reffl -kernel $krnl -fmeanu $reffl -odt float
+    fi
+fi
+
+# weightning mask
+if [ $do_refmask -eq 1 ]
+then
+    if [ -e "$refmask" ]
+    then
+         imcp $refmask $refweight
+    else
+        case $refmask in
+            thr)    fslmaths $reffl -thrp $mask_thr $refweight
+                    ;;
+            bet)    bet $reffl ${reffl}_bet -o -m -r 30 -f 0.4
+                    if [ $robust_bet -eq 1 ]
+                    then
+                      CoM=`fslstats ${reffl}_bet_mask -C`
+                      bet $reffl ${reffl}_bet2 -o -m -r 30 -f 0.4 -c $CoM -R
+                      immv ${reffl}_bet2_mask $refweight
+                    else
+                      immv ${reffl}_bet_mask $refweight
+                    fi
+                    ;;
+              *)    echo "ERROR: Unknown option <$refmask> for reference weightning"
+                    exit 1
+                    ;;
+        esac
+    fi
+fi
+
+#----------------------------------------------------------------------#
+# prepare the arguments for the flirt call
+inweight=${tmpdir}/inmask
+flirt_fun_par=""
+
+flirt_fun_par="$flirt_fun_par -cost $costfun -searchcost $costfun"
+flirt_fun_par="$flirt_fun_par -searchrx -$rot_tol $rot_tol -searchry  -$rot_tol $rot_tol -searchrz  -$rot_tol $rot_tol"
+flirt_fun_par="$flirt_fun_par -dof $dof"
+
+if [ $do_refmask -eq 1 ]
+then
+    flirt_fun_par="$flirt_fun_par -refweight $refweight"
+fi
+if [ $do_inmask -eq 1 ]
+then
+    flirt_fun_par="$flirt_fun_par -inweight $inweight"
+fi
+
+#----------------------------------------------------------------------#
+# prepare the arguments for the image transformation
+trans_fun_par=""
+trans_fun_par="$trans_fun_par -interp $ip"
+
+if [ $ip = sinc ]
+then
+    trans_fun_par="$trans_fun_par -sincwidth $sincwd -sincwindow hanning"
+fi
+
+#----------------------------------------------------------------------#
+# run flirt on each volume
+init_par=""
+mc_lst=""
+matlst=""
+cnt=0
+#mkdir ${tmpdir}ov
+
+echo "working on volume:"
+for curr_vol in $vol_lst
+do
+    cnt=$(($cnt+1))
+    echo -n "$cnt "
+
+    curr_vol=`remove_ext ${curr_vol}`
+    curr_vol=`basename ${curr_vol}`
+
+    if [ $sm_fwhm != 0 ]
+    then
+        fslmaths ${tmpdir}/${curr_vol} -s `sigma2fwhm $sm_fwhm`  ${tmpdir}/${curr_vol}
+    fi
+
+    # create a weighning mask for the current input
+    if [ $do_inmask -eq 1 ]
+    then
+        case $inmask in
+            thr)    fslmaths ${tmpdir}/${curr_vol} -thrp $mask_thr $inweight
+                    ;;
+            bet)    bet ${tmpdir}/${curr_vol} ${tmpdir}/${curr_vol}_bet -o -m -r 30 -f 0.4
+                    if [ $robust_bet -eq 1 ]
+                    then
+                      CoM=`fslstats ${tmpdir}/${curr_vol}_bet_mask -C`
+                      bet  ${tmpdir}/${curr_vol} ${tmpdir}/${curr_vol}_bet2 -o -m -R -r 30 -f 0.4 -g -c $CoM
+                      immv ${tmpdir}/${curr_vol}_bet2_mask $inweight
+                    else
+                      immv ${tmpdir}/${curr_vol}_bet_mask $inweight
+                    fi
+                    ;;
+            *)      echo "ERROR: Unknown option <$inmask> for input weightning!"
+                    exit
+                    ;;
+        esac
+    fi
+
+    flirt -in ${tmpdir}/${curr_vol} -ref $reffl -omat ${outnm}.mat/${curr_vol} $flirt_fun_par $init_par
+
+    if [ $do_hdr -eq 1 ]
+    then
+        flirt -in ${tmpdir}/${curr_vol} -ref $rsmpl_hdr -o ${tmpdir}/mc_${curr_vol} -init ${outnm}.mat/${curr_vol} $flirt_fun_par -applyxfm
+    else
+        flirt -in ${tmpdir}/${curr_vol} -ref ${tmpdir}/${curr_vol} -o ${tmpdir}/mc_${curr_vol} -init ${outnm}.mat/${curr_vol} $flirt_fun_par -applyxfm
+    fi
+
+    mc_lst="$mc_lst ${tmpdir}/mc_${curr_vol}"
+    matlst="$matlst ${outnm}.mat/${curr_vol}"
+
+    if [ $do_init -eq 1 ]
+    then
+        init_par="-init ${outnm}.mat/${curr_vol}"   # initialize fit with the previous transformation matrix
+    fi
+done
+echo " - done"
+echo ""
+
+fslmerge -t ${outnm} $mc_lst
+
+#----------------------------------------------------------------------#
+if [ $do_final -eq 1 ]
+then
+    fslmaths ${outnm} -Tmean $tmpdir/final_mean
+    bet ${tmpdir}/final_mean ${tmpdir}/final_mean_bet -o -m -r 30 -f 0.4
+    CoM=`fslstats ${tmpdir}/final_mean_bet_mask -C`
+    bet ${tmpdir}/final_mean ${tmpdir}/final_mean_bet2 -o -m -r 30 -f 0.4 -c $CoM -R
+
+    inweight=${tmpdir}/final_mean_bet_mask
+
+    flirt -in ${tmpdir}/final_mean -ref $reffl -omat $tmpdir/final_mean.mat $flirt_fun_par
+
+    declare -a vols=($vol_lst)
+    cnt=0
+    mc2_lst=""
+    for curr_mat in $matlst
+    do
+        cvol=`basename ${vols[$cnt]}`
+
+        echo "$cnt    $cvol    $curr_mat    mc2_$cvol"
+
+        convert_xfm -omat $curr_mat -concat $curr_mat $tmpdir/final_mean.mat
+
+        flirt -in $tmpdir/$cvol -ref ${tmpdir}/final_mean -o $tmpdir/mc2_$cvol -init $curr_mat $flirt_fun_par -applyxfm
+
+        cnt=$(($cnt+1))
+
+        mc2_lst="$mc2_lst $tmpdir/mc2_$cvol"
+    done
+
+    fslmerge -t ${outnm} $mc2_lst
+fi
+
+#----------------------------------------------------------------------#
+fsl_mcpar $outnm.mat -corr -out ${outnm}.par
+
+#----------------------------------------------------------------------#
+if [ $keep_tmp -eq 0 ]
+then
+    rm -r $tmpdir
+fi

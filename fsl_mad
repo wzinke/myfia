@@ -1,0 +1,78 @@
+#!/bin/bash
+#
+
+
+Usage() {
+cat << EOF
+
+    Usage: fsl_mad <infile> [options]
+
+    calculates the median absolute deviation for a 4D-datafile
+
+    OPTIONS:
+            -out        basename for the data output
+            -mask       use file for masking region
+            -keep       do not delete temporary files
+
+            ###########################################################
+            ##   (c) wolf zinke (2008) - part of the MaFIA toolbox   ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+EOF
+    exit 1
+}
+
+if [ $# -lt 1 ]; then
+    Usage
+else
+    flnm=$1;
+    shift
+fi
+
+outnm=${flnm}_mad
+keep_tmp=0
+do_mask=0
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+    -out)   outnm=$2
+            shift 2
+            ;;
+    -mask)  maskfile=$2
+            do_mask=1
+            shift 2
+            ;;
+    -keep)  keep_tmp=1
+            ;;
+       -*)  echo "Wrong option: <$1>"
+            echo ""
+            Usage
+            ;;
+        *)  break
+            ;;
+    esac
+done
+
+tmpdir=`tmpnam tmpMAD`
+rm $tmpdir
+mkdir $tmpdir
+
+if [ $do_mask -eq 1 ]
+then
+    fslmaths $flnm -mas $maskfile -Tmedian $tmpdir/tmp_median -odt float
+else
+    fslmaths $flnm -Tmedian $tmpdir/tmp_median -odt float
+fi
+fslmaths $flnm -sub $tmpdir/tmp_median -abs $tmpdir/tmp_residuals -odt float
+
+fslmaths $tmpdir/tmp_residuals -Tmedian $outnm
+
+
+if [ $keep_tmp -eq 0 ]
+then
+    rm -r $tmpdir
+fi
+
+

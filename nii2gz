@@ -1,0 +1,46 @@
+#!/bin/bash
+#
+# nii2gz
+#
+# created: 21.07.2009
+# by zinke
+# Licensed under the MIT license        
+#__________________________________________________________________________________________#
+
+# gzip all nii files in the current directory. Use pigz for parallel processing if available.
+
+if [ $# -lt 1 ] ; then
+    fllst=`ls -1 *.nii`
+else
+    fllst=$1;
+fi
+
+
+if [ ! ${SGE_ROOT}'x' == 'x' ]
+then
+    for cfl in $fllst
+    do
+        qrsh "gzip --best -q $cfl" &
+    done
+else
+
+#     if which parallel >/dev/null
+#     then
+#
+#         echo "$fllst"  parallel gzip
+# # parallel gzip
+# #     el
+    if which pigz >/dev/null
+    then
+        pigz --best --quiet $fllst
+    else
+        for cfl in $fllst
+        do
+            echo "Nothing found to start multiple processes (e.g. qrsh or pigz)\n   -> running compression in serial order."
+            gzip --best -q $cfl
+        done
+    fi
+fi
+
+
+#__________________________________________________________________________________________#

@@ -1,0 +1,195 @@
+#!/bin/bash
+#
+
+Usage() {
+cat << EOF
+
+    Usage: $0 -out <confound_mat> [-ts "fl1 fl2 ..."]  [-pos "fl1 fl2 ..."]
+
+            Given a list of ascii files this function produces a single ascii-matrix.
+            Input files could contain values for each volume <-ts> or specify volumes
+            that set to 1 while all the others are 0.
+
+    OPTIONS:
+            -out    name of output file - supresses output to screen.
+            -ts     list of ascii files with 1 value per volume.
+            -pos    list of ascii files that specify confound volumes.
+            -vol    Number of volumes - required, if <-ts> is not used.
+
+            ###########################################################
+            ##   (c) wolf zinke (2008) - part of the MaFIA toolbox   ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+EOF
+    exit 1
+}
+
+#----------------------------------------------------------------------#
+comp_vol=0
+get_pos=0
+get_ts=0
+ts_vol=-1
+num_vol=-1
+wrt_fl=0
+wrt_usg=1
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+        -out)   outfl=$2
+                wrt_fl=1
+                shift 2
+                ;;
+        -ts)    ts_lst=$2
+                shift 2
+                get_ts=1
+                wrt_usg=0
+                ;;
+        -pos)   pos_lst=$2
+                get_pos=1
+                wrt_usg=0
+                shift 2
+                ;;
+        -vol)   num_vol=$2
+                comp_vol=1
+                shift 2
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+if [ $wrt_usg -eq 1 ]
+then
+    Usage
+fi
+
+#----------------------------------------------------------------------#
+ts_vol=-1
+if [ $get_ts -eq 1 ]
+then
+    for curr_ts in $ts_lst
+    do
+        if [ ! -e $curr_ts ]
+        then
+            echo ""
+            echo "ERROR: File does not exist!"
+            echo "       file: $curr_ts"
+            echo ""
+            exit
+        fi
+        cvol=$(wc -l "$curr_ts" | awk '{print $1}')
+
+        if [ $ts_vol -gt 0 ]
+        then
+            if [ ! $cvol -eq  $ts_vol ]
+            then
+                echo ""
+                echo "ERROR: Different number ov volumes ($cvol instead of $ts_vol)!"
+                echo "       file: $curr_ts"
+                echo ""
+                exit
+            fi
+        else
+            ts_vol=$cvol
+        fi
+    done
+
+    if [ $num_vol -lt 0 ]
+    then
+        num_vol=$ts_vol
+    else
+        if [ ! $num_vol -eq $ts_vol ]
+        then
+            echo ""
+            echo "ERROR: Mismatch between number of volumes ($num_vol) and time points ($ts_vol)!"
+            echo ""
+            exit
+        fi
+    fi
+fi
+
+#----------------------------------------------------------------------#
+if [ $get_pos -eq 1 ]
+then
+    if [ $num_vol -lt 0 ]
+    then
+        echo ""
+        echo "ERROR: Number of volumes not specified!"
+        Usage
+    fi
+
+    pos_arr=""
+    for curr_pos in $pos_lst
+    do
+        cpos=`cat $curr_pos`
+
+        for givpos in $cpos
+        do
+            if [ $givpos -gt $num_vol ]
+            then
+                echo ""
+                echo "ERROR: Position number ($givpos) greater than number of volumes ($ts_vol) specified!"
+                echo ""
+                exit
+            fi
+            pos_arr="$pos_arr $givpos"
+        done
+    done
+
+    all_pos=`echo "$pos_arr" | sort -run`
+fi
+
+#----------------------------------------------------------------------#
+if [ $wrt_fl -eq 1 ]
+then
+    echo -n "" > $outfl
+fi
+
+cnt=0
+while [ $cnt -lt $num_vol ]
+do
+    curr_line=""
+
+#----------------------------------------------------------------------#
+    if [ $get_ts -eq 1 ]
+    then
+        for curr_ts in $ts_lst
+        do
+            declare -a vals=(`cat $curr_ts`)
+            curr_line="$curr_line ${vals[$cnt]}"
+        done
+    fi
+
+#----------------------------------------------------------------------#
+    cnt=$(($cnt+1))
+    if [ $get_pos -eq 1 ]
+    then
+        for cpos in $all_pos
+        do
+            if [ $cpos -eq $cnt ]
+            then
+                curr_line="$curr_line 1"
+            else
+                curr_line="$curr_line 0"
+            fi
+        done
+    fi
+
+#----------------------------------------------------------------------#
+    if [ $wrt_fl -eq 1 ]
+    then
+        echo "$curr_line" >> $outfl
+    else
+        echo "$curr_line"
+    fi
+done
+
+
+
+

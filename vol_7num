@@ -1,0 +1,50 @@
+#!/bin/bash
+#
+
+Usage() {
+cat << EOF
+
+    Usage: vol_7num <infile> [options]
+
+    Calculates the 5 statistical values describing the voxel distribution:
+        Min 1.quantile Median 3.quantile Max Mean Std
+
+    OPTIONS:
+            -mask    calculate values for the masked region
+
+            ###########################################################
+            ##   (c) wolf zinke (2008) - part of the MaFIA toolbox   ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+EOF
+    exit 1
+}
+
+if [ $# -lt 1 ]; then
+    Usage
+else
+    flnm=`remove_ext $1`;
+    shift
+fi
+
+mask_file=""
+do_robust=0
+
+# get options
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+        -mask)  mask_file=`echo "-k $2"`
+                shift 2
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+fslstats $flnm $mask_file -n -p 0 -p 25 -p 50 -p 75 -p 100 -m -s

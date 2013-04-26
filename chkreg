@@ -1,0 +1,134 @@
+#!/bin/bash
+#
+# chkreg
+#
+# created: 18.10.2011
+# by zinke
+#
+
+Usage() {
+cat << EOF
+
+    Usage: chkreg <infl> <reffl> <transmat> <imgfl> [options]
+
+    OPTIONS:
+            -aff    use an additional affine transformation
+            -keep   don't delete temporary files when finished
+
+            ###########################################################
+            ##   (c) wolf zinke (2011) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+
+EOF
+exit 1
+
+}
+
+
+if [ $# -lt 4 ]; then
+    Usage
+else
+    infl=`remove_ext $1`
+    reffl=`remove_ext $2`
+    matfl=$3
+    imgfl=$4
+    shift 4
+fi
+
+#__________________________________________________________________________________________#
+
+keep_tmp=0
+combtrans=0
+affstr=""
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+        -aff)   combtrans=1
+                affmat=$2
+                shift 2
+                ;;
+        -keep)  keep_tmp=1
+                shift
+                ;;
+          -*)   Wrong option: <$1>"
+                "
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+#__________________________________________________________________________________________#
+
+tmpdir=`tmpnam tmp_chkreg`
+rm $tmpdir
+mkdir $tmpdir
+
+# flirt -in $infl -ref ${reffl} -applyxfm -init $matfl -out $tmpdir/low2high
+if [ $matfl == 'i' ]
+then
+    flirt -in ${reffl} -ref $infl -applyxfm -init $FSLDIR/etc/flirtsch/ident.mat -out $tmpdir/high2low
+elif [ `imtest $matfl` -eq 1 ]
+then
+    invwarp   --ref=$infl --warp=$matfl --out=$tmpdir/high2low_warp  --force
+
+    if [ $combtrans -eq 1 ]
+    then
+        convert_xfm -omat $tmpdir/affmat_inv.mat  -inverse $affmat
+        affstr="--postmat=$tmpdir/affmat_inv.mat"
+    fi
+
+    applywarp --ref=$infl --in=${reffl} $affstr --warp=$tmpdir/high2low_warp --out=$tmpdir/high2low
+else
+    convert_xfm -omat $tmpdir/high2low.mat  -inverse $matfl
+    flirt -in ${reffl} -ref $infl -applyxfm -init $tmpdir/high2low.mat -out $tmpdir/high2low
+fi
+
+slicer $tmpdir/high2low $infl -s 2 -x 0.35 $tmpdir/sla.png -x 0.45 $tmpdir/slb.png -x 0.55 $tmpdir/slc.png -x 0.65 $tmpdir/sld.png -y 0.35 $tmpdir/sle.png -y 0.45 $tmpdir/slf.png -y 0.55 $tmpdir/slg.png -y 0.65 $tmpdir/slh.png -z 0.35 $tmpdir/sli.png -z 0.45 $tmpdir/slj.png -z 0.55 $tmpdir/slk.png -z 0.65 $tmpdir/sll.png
+
+pngappend $tmpdir/sla.png + $tmpdir/slb.png + $tmpdir/slc.png + $tmpdir/sld.png + $tmpdir/sle.png + $tmpdir/slf.png + $tmpdir/slg.png + $tmpdir/slh.png + $tmpdir/sli.png + $tmpdir/slj.png + $tmpdir/slk.png + $tmpdir/sll.png $tmpdir/tmp_mag2epi.png
+
+slicer $infl $tmpdir/high2low -s 2 2 -x 0.35 $tmpdir/sla.png -x 0.45 $tmpdir/slb.png -x 0.55 $tmpdir/slc.png -x 0.65 $tmpdir/sld.png -y 0.35 $tmpdir/sle.png -y 0.45 $tmpdir/slf.png -y 0.55 $tmpdir/slg.png -y 0.65 $tmpdir/slh.png -z 0.35 $tmpdir/sli.png -z 0.45 $tmpdir/slj.png -z 0.55 $tmpdir/slk.png -z 0.65 $tmpdir/sll.png
+
+pngappend $tmpdir/sla.png + $tmpdir/slb.png + $tmpdir/slc.png + $tmpdir/sld.png + $tmpdir/sle.png + $tmpdir/slf.png + $tmpdir/slg.png + $tmpdir/slh.png + $tmpdir/sli.png + $tmpdir/slj.png + $tmpdir/slk.png + $tmpdir/sll.png $tmpdir/tmp_epi2mag.png
+
+pngappend $tmpdir/tmp_mag2epi.png - $tmpdir/tmp_epi2mag.png ${imgfl}_lowhres.png
+
+###########
+if [ $matfl == 'i' ]
+then
+    flirt -in ${infl} -ref ${reffl} -applyxfm -init $FSLDIR/etc/flirtsch/ident.mat -out $tmpdir/low2high
+elif [ `imtest $matfl` -eq 1 ]
+then
+
+    if [ $combtrans -eq 1 ]
+    then
+        affstr="--premat=$affmat"
+    fi
+
+    applywarp --ref=${reffl} --in=$infl --warp=$matfl --out=$tmpdir/low2high
+else
+    flirt -in $infl -ref ${reffl} -applyxfm -init $matfl -out $tmpdir/low2high -usesqform
+fi
+
+slicer ${reffl} $tmpdir/low2high -s 2 -x 0.35 $tmpdir/sla.png -x 0.45 $tmpdir/slb.png -x 0.55 $tmpdir/slc.png -x 0.65 $tmpdir/sld.png -y 0.35 $tmpdir/sle.png -y 0.45 $tmpdir/slf.png -y 0.55 $tmpdir/slg.png -y 0.65 $tmpdir/slh.png -z 0.35 $tmpdir/sli.png -z 0.45 $tmpdir/slj.png -z 0.55 $tmpdir/slk.png -z 0.65 $tmpdir/sll.png
+
+pngappend $tmpdir/sla.png + $tmpdir/slb.png + $tmpdir/slc.png + $tmpdir/sld.png + $tmpdir/sle.png + $tmpdir/slf.png + $tmpdir/slg.png + $tmpdir/slh.png + $tmpdir/sli.png + $tmpdir/slj.png + $tmpdir/slk.png + $tmpdir/sll.png $tmpdir/tmp_mag2epi.png
+
+slicer $tmpdir/low2high ${reffl} -s 2 2 -x 0.35 $tmpdir/sla.png -x 0.45 $tmpdir/slb.png -x 0.55 $tmpdir/slc.png -x 0.65 $tmpdir/sld.png -y 0.35 $tmpdir/sle.png -y 0.45 $tmpdir/slf.png -y 0.55 $tmpdir/slg.png -y 0.65 $tmpdir/slh.png -z 0.35 $tmpdir/sli.png -z 0.45 $tmpdir/slj.png -z 0.55 $tmpdir/slk.png -z 0.65 $tmpdir/sll.png
+
+pngappend $tmpdir/sla.png + $tmpdir/slb.png + $tmpdir/slc.png + $tmpdir/sld.png + $tmpdir/sle.png + $tmpdir/slf.png + $tmpdir/slg.png + $tmpdir/slh.png + $tmpdir/sli.png + $tmpdir/slj.png + $tmpdir/slk.png + $tmpdir/sll.png $tmpdir/tmp_epi2mag.png
+
+pngappend $tmpdir/tmp_mag2epi.png - $tmpdir/tmp_epi2mag.png ${imgfl}_highres.png
+
+
+
+if [ $keep_tmp -eq 0 ]
+then
+    rm -r $tmpdir
+fi

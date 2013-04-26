@@ -1,0 +1,486 @@
+#!/bin/bash
+#
+# fsl_ttest
+#
+# created: 18.12.2011
+# by zinke
+#
+
+Usage() {
+cat << EOF
+
+    Usage: $0 <smplA> [options]
+
+    make an one sample, unpaired two-sample, paired two sample or tripled t-test.
+    As default, this script calls flameo to carry out a parametric t-test,
+    however, with the -np option it is possible to use randomise instead.
+
+    OPTIONS:
+            -o      name stem for the output data
+            -B      use this data set as second sample
+            -C      If a third sample is provided, a tripled t-test will be done
+            -v      test one sample against this numeric value
+            -m      use this mask file
+            -nperm  number of permutations (sets to non-parametric test)
+            -do     create designs only (NIY!)
+            -p      make a paired test (both samples must have the same size)
+            -np     make a non-parametric t-test using randomize
+            -grid   parallelize randomize (using randomise_parallel)
+            -tmp    temporary directory where single 3D files are saved
+            -keep   don't delete temporary files when finished
+
+            ###########################################################
+            ##   (c) wolf zinke (2011) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+EOF
+exit 1
+
+}
+
+
+if [ $# -lt 1 ]; then
+    Usage
+else
+    smplA=`remove_ext $1`;
+    shift
+fi
+
+outfl=${smplA}_tmap
+testval=0
+do1smpl=1
+do_paired=0
+keep_tmp=0
+tflame=1
+get_mask=1
+get_grpmn=0
+num_perm=1
+run_grid=0
+
+tmpdir=`tmpnam tmp_ttest`
+rm $tmpdir
+
+#__________________________________________________________________________________________#
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+          -v)   testval=$2
+                shift 2
+                ;;
+          -o)   outfl=$2
+                shift 2
+                ;;
+          -B)   smplB=$2
+                do1smpl=2
+                shift 2
+                ;;
+          -C)   smplC=$2
+                do1smpl=3
+                do_paired=1
+                shift 2
+                ;;
+          -m)   maskfl=$2
+                get_mask=0
+                shift 2
+                ;;
+      -nperm)   num_perm=$2
+                tflame=0
+                shift 2
+                ;;
+         -np)   tflame=0
+                shift
+                ;;
+          -p)   do_paired=1
+                shift
+                ;;
+       -grid)   run_grid=1
+                shift
+                ;;
+         -tmp)  tmpdir=$2
+                debug_mode=1
+                keep_tmp=1
+                shift 2
+                ;;
+        -keep)  keep_tmp=1
+                debug_mode=1
+                shift
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+if [ -d $tmpdir ]
+then
+   rm -r $tmpdir    # delete whole directory
+fi
+mkdir $tmpdir
+
+#__________________________________________________________________________________________#
+
+if [ $do1smpl -eq 1 ]
+then
+    fslmaths $smplA -sub $testval $tmpdir/testset
+elif [ $do1smpl -eq 2 ]
+then
+    fslmerge -t $tmpdir/testset $smplA $smplB
+else
+    fslmerge -t $tmpdir/testset $smplA $smplB $smplC
+fi
+
+nA=`fslnvols $smplA`
+numPTS=$nA
+
+
+if [ $get_mask -eq 1 ]
+then
+    fslmaths $tmpdir/testset -Tmin -bin $tmpdir/testset_mask -odt char
+    maskfl=$tmpdir/testset_mask
+fi
+
+if [ $tflame -eq 1 ]  # bloody inconsistencies of argument specification in fsl tools
+then
+    maskstr="--mask=$maskfl"
+else
+    maskstr="-m $maskfl"
+fi
+
+
+if [ $do1smpl -gt 1 ]
+then
+    nB=`fslnvols $smplB`
+    numPTS=$(($nA+$nB))
+
+    if [ $do_paired -eq 1 ]
+    then
+        if [ ! $nA -eq $nB ]
+        then
+            echo "ERROR: SampleA and sample B need the same number of points for a paired test!"
+            exit
+        fi
+        if [ $do1smpl -eq 3 ]
+        then
+            nC=`fslnvols $smplC`
+            numPTS=$(($numPTS+$nC))
+            if [ ! $nA -eq $nC ]
+            then
+                echo "ERROR: SampleA and sample C need the same number of points for a paired test!"
+                exit
+            fi
+        fi
+    fi
+fi
+
+##################################
+### create design files
+
+# design.grp  (this should be the same for all three kinds of tests)
+echo "/NumWaves 1"        > $tmpdir/ttest.grp
+echo "NumPoints $numPTS" >> $tmpdir/ttest.grp
+echo ""                  >> $tmpdir/ttest.grp
+echo "/Matrix"           >> $tmpdir/ttest.grp
+cnt=0
+while [ $cnt -lt $numPTS ]
+do
+    cnt=$(($cnt+1))
+    echo "1"             >> $tmpdir/ttest.grp
+done
+
+if [ $do1smpl -eq 1 ]   # one sample t test
+then
+    # design.mat
+    echo "/NumWaves 1"                   > $tmpdir/ttest.mat
+    echo "/NumPoints  $numPTS"          >> $tmpdir/ttest.mat
+    echo "/PPheights      1.000000e+00" >> $tmpdir/ttest.mat
+    echo ""                             >> $tmpdir/ttest.mat
+    echo "/Matrix"                      >> $tmpdir/ttest.mat
+    cnt=0
+    while [ $cnt -lt $numPTS ]
+    do
+        cnt=$(($cnt+1))
+        echo "1" >> $tmpdir/ttest.mat
+    done
+    echo ""               >> $tmpdir/ttest.mat
+
+# design.con
+    echo '/ContrastName1   "sample A"'    > $tmpdir/ttest.con
+    echo "/NumWaves   1"                 >> $tmpdir/ttest.con
+    echo "/NumContrasts   1"             >> $tmpdir/ttest.con
+    echo "/PPheights      1.000000e+00"  >> $tmpdir/ttest.con
+    echo ""                              >> $tmpdir/ttest.con
+    echo "/Matrix"                       >> $tmpdir/ttest.con
+    echo "1"                             >> $tmpdir/ttest.con
+
+elif [ $do_paired -eq 0 ] # unpaired two sample t test
+then
+    # code modified from FSL's design_ttest2 script
+# design.con
+    echo '/ContrastName1   "A-B"'  > $tmpdir/ttest.con
+    echo '/ContrastName1   "B-A"'  > $tmpdir/ttest.con
+    echo "/NumWaves 2"            >> $tmpdir/ttest.con
+    echo "/NumContrasts 2"        >> $tmpdir/ttest.con
+    echo "/PPheights 1 1"         >> $tmpdir/ttest.con
+    echo ""                       >> $tmpdir/ttest.con
+    echo "/Matrix"                >> $tmpdir/ttest.con
+    echo "1 -1"                   >> $tmpdir/ttest.con
+    echo "-1 1"                   >> $tmpdir/ttest.con
+
+# design.mat
+    echo "/NumWaves 2"           > $tmpdir/ttest.mat
+    echo "/NumPoints $numPTS"   >> $tmpdir/ttest.mat
+    echo "/PPheights 1 1"       >> $tmpdir/ttest.mat
+    echo ""                     >> $tmpdir/ttest.mat
+    echo "/Matrix"              >> $tmpdir/ttest.mat
+    cnt=0
+    while [ $cnt -lt $nA ]
+    do
+        cnt=$(($cnt+1))
+        echo "1 0" >> $tmpdir/ttest.mat
+    done
+    cnt=0
+    while [ $cnt -lt $nB ]
+    do
+        cnt=$(($cnt+1))
+        echo "0 1" >> $tmpdir/ttest.mat
+    done
+    echo ""               >> $tmpdir/ttest.mat
+
+elif [ $do1smpl -eq 2 ]    # paired two sample t test
+then
+# design.con
+    echo '/ContrastName1   "A-B"'    > $tmpdir/ttest.con
+    echo '/ContrastName2   "B-A"'    > $tmpdir/ttest.con
+    echo "/NumWaves $(($nA+1))"     >> $tmpdir/ttest.con
+    echo "/NumContrasts 2"          >> $tmpdir/ttest.con
+    echo "/PPheights 2 2"           >> $tmpdir/ttest.con
+    echo ""                         >> $tmpdir/ttest.con
+    echo "/Matrix"                  >> $tmpdir/ttest.con
+    echo -n "1"                     >> $tmpdir/ttest.con
+    cnt=0
+    while [ $cnt -lt $nA ]
+    do
+        cnt=$(($cnt+1))
+        echo -n " 0"      >> $tmpdir/ttest.con
+    done
+    echo ""               >> $tmpdir/ttest.con
+    echo -n "-1"          >> $tmpdir/ttest.con
+    cnt=0
+    while [ $cnt -lt $nA ]
+    do
+        cnt=$(($cnt+1))
+        echo -n " 0"      >> $tmpdir/ttest.con
+    done
+    echo ""               >> $tmpdir/ttest.con
+
+# design.mat
+    echo "/NumWaves $(($nA+1))"  > $tmpdir/ttest.mat
+    echo "/NumPoints $numPTS"   >> $tmpdir/ttest.mat
+    echo -n "/PPheights 2"      >> $tmpdir/ttest.mat
+    cnt=0
+    while [ $cnt -lt $nA ]
+    do
+        cnt=$(($cnt+1))
+        echo -n " 1"      >> $tmpdir/ttest.mat
+    done
+    echo ""               >> $tmpdir/ttest.mat
+    echo ""               >> $tmpdir/ttest.mat
+    echo "/Matrix"        >> $tmpdir/ttest.mat
+    cnt=0
+    while [ $cnt -lt $nA ]
+    do
+        cnt=$(($cnt+1))
+        echo -n "1" >> $tmpdir/ttest.mat
+        pcnt=0
+        while [ $pcnt -lt $nA ]
+        do
+            pcnt=$(($pcnt+1))
+            if [ $pcnt -eq $cnt ]
+            then
+                echo -n " 1" >> $tmpdir/ttest.mat
+            else
+                echo -n " 0" >> $tmpdir/ttest.mat
+            fi
+        done
+        echo ""              >> $tmpdir/ttest.mat
+    done
+
+    cnt=0
+    while [ $cnt -lt $nB ]
+    do
+        cnt=$(($cnt+1))
+        echo -n "-1" >> $tmpdir/ttest.mat
+        pcnt=0
+        while [ $pcnt -lt $nB ]
+        do
+            pcnt=$(($pcnt+1))
+            if [ $pcnt -eq $cnt ]
+            then
+                echo -n " 1" >> $tmpdir/ttest.mat
+            else
+                echo -n " 0" >> $tmpdir/ttest.mat
+            fi
+        done
+        echo ""              >> $tmpdir/ttest.mat
+    done
+    echo ""                  >> $tmpdir/ttest.mat
+
+else  # tripled t test
+# design.con
+    echo '/ContrastName1   "A-B"'    > $tmpdir/ttest.con
+    echo '/ContrastName2   "A-C"'    > $tmpdir/ttest.con
+    echo '/ContrastName2   "B-C"'    > $tmpdir/ttest.con
+    echo "/NumWaves $(($nA+2))"     >> $tmpdir/ttest.con
+    echo "/NumContrasts 3"          >> $tmpdir/ttest.con
+    echo "/PPheights 1 1 1"           >> $tmpdir/ttest.con
+    echo ""                         >> $tmpdir/ttest.con
+    echo "/Matrix"                  >> $tmpdir/ttest.con
+    echo -n "2 1"                     >> $tmpdir/ttest.con
+    cnt=0
+    while [ $cnt -lt $nA ]
+    do
+        cnt=$(($cnt+1))
+        echo -n " 0"      >> $tmpdir/ttest.con
+    done
+    echo ""               >> $tmpdir/ttest.con
+    echo -n "1 2"          >> $tmpdir/ttest.con
+    cnt=0
+    while [ $cnt -lt $nB ]
+    do
+        cnt=$(($cnt+1))
+        echo -n " 0"      >> $tmpdir/ttest.con
+    done
+    echo ""               >> $tmpdir/ttest.con
+    echo -n "-1 1"          >> $tmpdir/ttest.con
+    cnt=0
+    while [ $cnt -lt $nC ]
+    do
+        cnt=$(($cnt+1))
+        echo -n " 0"      >> $tmpdir/ttest.con
+    done
+    echo ""               >> $tmpdir/ttest.con
+
+# design.mat
+    echo "/NumWaves $(($nA+2))"  > $tmpdir/ttest.mat
+    echo "/NumPoints $numPTS"   >> $tmpdir/ttest.mat
+    echo -n "/PPheights 2 2"      >> $tmpdir/ttest.mat
+    cnt=0
+    while [ $cnt -lt $nA ]
+    do
+        cnt=$(($cnt+1))
+        echo -n " 1 1"      >> $tmpdir/ttest.mat
+    done
+    echo ""               >> $tmpdir/ttest.mat
+    echo ""               >> $tmpdir/ttest.mat
+    echo "/Matrix"        >> $tmpdir/ttest.mat
+    cnt=0
+    while [ $cnt -lt $nA ]
+    do
+        cnt=$(($cnt+1))
+        echo -n "1 1" >> $tmpdir/ttest.mat
+        pcnt=0
+        while [ $pcnt -lt $nA ]
+        do
+            pcnt=$(($pcnt+1))
+            if [ $pcnt -eq $cnt ]
+            then
+                echo -n " 1" >> $tmpdir/ttest.mat
+            else
+                echo -n " 0" >> $tmpdir/ttest.mat
+            fi
+        done
+        echo ""              >> $tmpdir/ttest.mat
+    done
+
+    cnt=0
+    while [ $cnt -lt $nB ]
+    do
+        cnt=$(($cnt+1))
+        echo -n "-1 0" >> $tmpdir/ttest.mat
+        pcnt=0
+        while [ $pcnt -lt $nB ]
+        do
+            pcnt=$(($pcnt+1))
+            if [ $pcnt -eq $cnt ]
+            then
+                echo -n " 1" >> $tmpdir/ttest.mat
+            else
+                echo -n " 0" >> $tmpdir/ttest.mat
+            fi
+        done
+        echo ""              >> $tmpdir/ttest.mat
+    done
+
+    cnt=0
+    while [ $cnt -lt $nC ]
+    do
+        cnt=$(($cnt+1))
+        echo -n "0 -1" >> $tmpdir/ttest.mat
+        pcnt=0
+        while [ $pcnt -lt $nC ]
+        do
+            pcnt=$(($pcnt+1))
+            if [ $pcnt -eq $cnt ]
+            then
+                echo -n " 1" >> $tmpdir/ttest.mat
+            else
+                echo -n " 0" >> $tmpdir/ttest.mat
+            fi
+        done
+        echo ""              >> $tmpdir/ttest.mat
+    done
+    echo ""                  >> $tmpdir/ttest.mat
+
+fi
+#__________________________________________________________________________________________#
+
+if [ $tflame -eq 1 ]  # use fsl_glm for a parametric test
+then
+
+#     echo "flameo --cope=$tmpdir/testset --dm=$tmpdir/ttest.mat --tc=$tmpdir/ttest.con --cs==$tmpdir/ttest.grp --runmode=ols"
+# exit
+#     flameo --cope=$tmpdir/testset --dm=$tmpdir/ttest.mat --tc=$tmpdir/ttest.con --cs==$tmpdir/ttest.grp --runmode=fe
+# # flameo --cope=filtered_func_data --vc=var_filtered_func_data --dvc=tdof_filtered_func_data --mask=mask --ld=stats --dm=design.mat --cs=design.grp --tc=design.con  --runmode=fe
+
+#  flameo --cope=$tmpdir/testset --mask=$maskfl --dm=$tmpdir/ttest.mat --tc=$tmpdir/ttest.con --cs=$tmpdir/ttest.grp --runmode=fe
+
+    fsl_glm -i $tmpdir/testset -d $tmpdir/ttest.mat -c $tmpdir/ttest.con -o $outfl --out_z=${outfl}_zstat --out_t=${outfl}_tstat 
+
+else # use randomize for a non-parametric test
+
+    if [ $do1smpl -gt 1 ]
+    then
+        designstr=" -d $tmpdir/ttest.mat -t $tmpdir/ttest.con"
+    fi
+
+    if [ $num_perm -eq 1 ]
+    then
+        permstr="-R"
+    else
+        permstr="-T"
+    fi
+
+    if [ run_grid - we 1  ]
+    then
+        FSLPARALLEL=condor
+        randomise_parallel -i $tmpdir/testset -o $outfl  $designstr $maskstr $permstr -n $num_perm -C 2.3 -x
+
+    else
+        randomise -i $tmpdir/testset -o $outfl  $designstr $maskstr $permstr -n $num_perm -C 2.3 -x
+    fi
+
+fi
+
+#----------------------------------------------------------------------#
+if [ $keep_tmp -eq 0 ]
+then
+    rm -r $tmpdir
+fi
+
+

@@ -1,0 +1,36 @@
+#!/bin/bash
+#
+
+Usage() {
+cat << EOF
+
+    Usage: Rcalc <"expression">
+
+           evaluates the expression by piping it to R (R syntax applies)
+
+            ###########################################################
+            ##   (c) wolf zinke (2008) - part of the MaFIA toolbox   ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+EOF
+exit 1
+}
+
+if [ $# -lt 1 ]; then
+    Usage
+else
+    funcal=$1
+fi
+tmpfl=`tmpnam tmpR`
+
+
+funcal="x = $funcal; write.table(x, file = '$tmpfl',row.names=F,col.names=F); q();"
+#funcal="x = $funcal; write(x, file = $tmpfl,append=FALSE); q();"
+echo "$funcal" | R --vanilla --slave
+
+
+cat $tmpfl
+rm $tmpfl
+
+

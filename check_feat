@@ -1,0 +1,149 @@
+#!/bin/bash
+#
+# check_feat
+#
+# created: 29.10.2009
+# by wolf
+#
+
+Usage() {
+cat << EOF
+
+    Usage: check_feat [options]
+
+    OPTIONS:
+            -reg        check for registration to standard
+
+            ###########################################################
+            ##   (c) wolf zinke (2008) - part of the MaFIA toolbox   ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+EOF
+    exit 1
+}
+
+#----------------------------------------------------------------------#
+check_standard=0
+
+# get options
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+        -reg)   check_standard=1
+                shift
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+# feat_dirs=`ls -1d *.feat`
+
+feat_dirs=$(find -type d -name '*.feat' | grep -v gfeat)
+
+
+cnt=0
+correct_done=0
+failed=0
+still_running=0
+found_warning=0
+
+#----------------------------------------------------------------------#
+
+for cdir in $feat_dirs
+do
+    cnt=$(($cnt+1))
+    alldone=1
+
+    if [ ! -e $cdir/rendered_thresh_zstat1.png ]
+    then
+        echo ""
+        echo ">>> $cdir: thresh_zstat1 not found!"
+        alldone=0
+
+        stillrunn=`cat $cdir/logs/feat0 | grep 'REFRESH CONTENT' | cut -d= -f2 | cut -d\> -f1`
+        if [ "X$stillrunn" != "X" ]
+        then
+            echo "            -> apparently still running!"
+            isrunning=1
+            still_running=$(($still_running+1))
+        fi
+
+        staterror=`cat $cdir/report_log.html | grep 'FILM did not complete'`
+
+        if [ "X$staterror" != "X" ]
+        then
+            echo "            -> $staterror"
+            failed=$(($failed+1))
+        fi
+
+        if [ -e $cdir/logs/feat4_post ]
+        then
+            staterror=`cat $cdir/logs/feat4_post | grep 'Could not open image stats/sigmasquareds' | cut -d\: -f1`
+
+            if [ "X$staterror" != "X" ]
+            then
+                echo "            -> Post Stats: stats/sigmasquareds not found"
+                failed=$(($failed+1))
+            fi
+        fi
+    fi
+
+    if [ $alldone -eq 1 ]
+    then
+        correct_done=$(($correct_done+1))
+
+        if [ ! -d $cdir/reg ]
+        then
+            echo ""
+            echo ">>> $cdir: no co-registration done!"
+        else
+            if [ $check_standard -eq 1 ]
+            then
+                if [ ! -d $cdir/reg_standard ]
+                then
+                    echo ""
+                    echo ">>> $cdir: not registered to standard!"
+                fi
+            fi
+        fi
+
+        staterror=`cat $cdir/logs/feat2_pre | grep 'WARNING' | head -1`
+
+
+        if [ "X$staterror" != "X" ]
+        then
+            warnmsg=`cat $cdir/logs/feat2_pre | grep 'WARNING'`
+            echo ">>> $cdir: Warning found in preprocessing log!"
+
+            echo "            -> $warnmsg"
+            found_warning=$(($found_warning+1))
+        fi
+    fi
+done
+
+res_str="$correct_done of $cnt completed"
+
+if [ $still_running -gt 0 ]
+then
+    res_str="$res_str - $still_running still running"
+fi
+
+if [ $failed -gt 0 ]
+then
+    res_str="$res_str - $failed failed"
+fi
+
+if [ $found_warning -gt 0 ]
+then
+    res_str="$res_str - $found_warning warnings during preprocessing"
+fi
+
+echo ""
+echo "$res_str"
+echo ""

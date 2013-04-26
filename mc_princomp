@@ -1,0 +1,46 @@
+#!/bin/bash
+#
+            ##            Licensed under the MIT license             ##
+
+Usage() {
+cat << EOF
+
+    Usage: $0 <par_fl> <out_fl> <grpnorm>
+
+           Reads in a file with parameters from motion correctionand uses these for a Principle Component Analysis
+	   Results are saved as EPS image as well as text file.
+	   Additional, the first four PC are saved as event files to be used as Regressors of no interest.
+
+	   if <grpnorm> is set to 1 (default is 0), motion parameter are normalized using the mad() calculated over
+	                all three (xyz) parameter instead doing this on each parameter.
+
+EOF
+exit 1
+}
+
+#----------------------------------------------------------------------#
+if [ $# -lt 1 ]
+then
+    Usage
+else
+    par_fl=$1
+fi
+
+if [ $# -lt 2 ]
+then
+    outfl=${par_fl}
+else
+    outfl=$2
+fi
+
+if [ $# -lt 3 ]
+then
+    grpnorm=0
+else
+    grpnorm=$3
+fi
+
+pdir=`dirname $(which $0)`
+
+echo "source('$pdir/mcpar_decomp.r'); mc.princomp('${par_fl}','${outfl}','${grpnorm}'); q()" | R --vanilla --slave
+rm Rplots.ps

@@ -1,0 +1,332 @@
+#!/bin/bash
+#
+# This script was written or modified by wolf zinke as part
+# of the MaFIA (Macaque Functional Image Analysis) package.
+#
+
+Usage() {
+cat << EOF
+
+    Usage: fsf_replace2 <fsffile> <runlst> [options]
+
+        This function replaces defined patterns in the .fsf <fsffile> file
+        with values that are specified in a text file (<runlst>).
+        This file must have a header line that identifies collumns as 'subject',
+        'study', 'sess_date', 'scan', or 'run'.
+            replacement patterns:
+                                    subject name - XXsubjXX
+                                      study name - XXstudyXX
+                                    session date - XXdateXX
+                                     scan number - XXscanXX
+                                      run number - XXrunXX  - as run0# if #<10
+                                      run number - XXrnumXX - as run#
+                                      run number - XXrrrXX  - as r#
+
+
+        OPTIONS:
+            -dir        Output directory for the .fsf files
+            -design     Create the design files (.con and .mat)
+            -conf       merge designs with confound files specified in the fsf-file
+            -plots      Create graphical representations of the design
+            -noise      get noise estimates of the data
+            -hp         calculates recommended HP cutoff period
+                        (with cutoffcalc, without confound data)
+            -ext        use extended information for the efficiency list
+            -cp_design  name of a target directory,
+                        using the same code as for the fsf file
+
+
+       ### ToDo: Implement the use of arguments for subject, run etc
+                 (write them to temporary file and use the rest unchanged)
+
+            ###########################################################
+            ##   (c) wolf zinke (2009) - part of the MaFIA toolbox   ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+EOF
+    exit 1
+}
+
+if [ $# -lt 2 ]; then
+    Usage
+else
+    fsfflnm=$1;
+    runlst=$2;
+    shift 2
+fi
+
+if [ ! -f $fsfflnm ]
+then
+    echo "ERROR: fsf file does not exist!"
+    echo "       > $fsfflnm"
+    exit 1
+fi
+
+if [ ! -f $runlst ]
+then
+    echo "ERROR: run list does not exist!"
+    echo "       > $runlst"
+    exit 1
+fi
+#----------------------------------------------------------------------#
+
+wrtdir=`pwd`;
+mkdesign=0
+keepdesign=0
+keepplots=0
+combconf=0
+do_copy=0
+noisestr=""
+extstr=""
+HPstr=""
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+        -dir)   wrtdir=$2
+                shift 2
+                ;;
+      -design)  mkdesign=1
+                keepdesign=1
+                shift
+                ;;
+   -cp_design)  do_copy=1
+                cp_path=$2
+                mkdesign=1
+                shift 2
+                ;;
+        -conf)  combconf=1
+                mkdesign=1
+                shift
+                ;;
+       -noise)  noisestr="-noise"
+                shift
+                ;;
+         -hp)   HPstr="-hp"
+                shift
+                ;;
+        -ext)   extstr="-ext"
+                shift
+                ;;
+       -plots)  keepplots=1
+                mkdesign=1
+                shift
+                ;;
+          -*)   Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+#----------------------------------------------------------------------#
+if [ ! -d $wrtdir ]; then
+    mkdir $wrtdir
+fi
+
+if [ $mkdesign -eq 1 ]
+then
+    if [ ! -d ${wrtdir}/design ]
+    then
+        mkdir ${wrtdir}/design
+    fi
+fi
+
+flstem=`echo $fsfflnm | cut -d. -f1`  # get rid of the fsf extension for later renaming
+
+#----------------------------------------------------------------------#
+# create a script file for running feat on the fsf files
+echo '#!/bin/bash' > run_feat
+echo '#' >> run_feat
+echo ' ' >> run_feat
+echo 'unset SGE_ROOT' >> run_feat
+echo 'sleep 60' >> run_feat
+echo ' ' >> run_feat
+chmod +x run_feat
+
+#----------------------------------------------------------------------#
+runlst_stem=`echo $runlst | cut -d. -f1`
+
+subj_pos=-1
+sess_pos=-1
+date_pos=-1
+scan_pos=-1
+run_pos=-1
+
+cnt=0
+while read line
+do
+    cnt=$(($cnt+1));
+    # skip header line
+    if [ $cnt -eq 1 ];
+    then
+        hd_ln=$line
+
+		pcnt=0
+		for chd in $line
+		do
+			pcnt=$(($pcnt+1));
+			case $chd in
+	  'Subj'| 'subject')    subj_pos=$pcnt
+							;;
+			  'session')    sess_pos=$pcnt
+							;;
+			'sess_date')    date_pos=$pcnt
+							;;
+		         'scan')    scan_pos=$pcnt
+							;;
+          'Run' | 'run')    run_pos=$pcnt
+							;;
+			esac
+		done
+    else
+        cstem="${flstem}"
+        dateXchng='sed'
+
+        pcnt=0
+        for chd in $line
+        do
+            pcnt=$(($pcnt+1));
+            case $pcnt in
+                $subj_pos ) cstem="${cstem}_$chd"
+                            dateXchng=`echo "$dateXchng -e 's/XXsubjXX/$chd/g'"`
+                            ;;
+                $sess_pos ) cstem="${cstem}_$chd"
+                            dateXchng=`echo "$dateXchng -e 's/XXsessXX/$chd/g'"`
+                            ;;
+                $date_pos ) cstem="${cstem}_$chd"
+                            dateXchng=`echo "$dateXchng -e 's/XXdateXX/$chd/g'"`
+                            ;;
+                $scan_pos ) cstem="${cstem}_scan_$chd"
+                            dateXchng=`echo "$dateXchng -e 's/XXscanXX/scan_$chd/g'"`
+                            ;;
+                $run_pos )  if [ $chd -eq $chd  2>/dev/null ]
+                            then
+                                cstem="${cstem}_run$chd"
+                                dateXchng=`echo "$dateXchng -e 's/XXrrrXX/r$chd/g'"`
+                                dateXchng=`echo "$dateXchng -e 's/XXrnumXX/run$chd/g'"`
+                                if [ $chd -lt 10 ]
+                                then
+                                    chd=0$chd
+                                fi
+                                dateXchng=`echo "$dateXchng -e 's/XXrunXX/run$chd/g'"`
+                            else
+                                cstem="${cstem}_$chd"
+                                dateXchng=`echo "$dateXchng -e 's/XXrunXX/$chd/g'"`
+                            fi
+                            ;;
+            esac
+        done
+
+        cfl="${wrtdir}/$cstem.fsf"
+
+#----------------------------------------------------------------------#
+        dateXchng=`echo "$dateXchng $fsfflnm > $cfl"`
+        eval $dateXchng
+
+#----------------------------------------------------------------------#
+# check number of volumes and adjust if required
+        nvol=`cat $cfl | grep 'set fmri(npts)'    | cut -d " " -f3`
+        dtfl=`cat $cfl | grep 'set feat_files(1)' | cut -d\"   -f2`
+
+        fvol=$nvol
+
+        if [ `imtest $dtfl` -eq 1 ]
+        then
+            fvol=`fslnvols $dtfl`
+        fi
+
+        echo "$cfl"   # show progress
+
+        if [ $nvol -eq $fvol ]
+        then
+            echo "feat $cfl" >> run_feat
+        else
+            echo "    >>>> Data file differs in number of volumes:"
+            echo "              $fvol instead of $nvol"
+
+            echo "# feat $cfl # different number of volumes ($fvol)!" >> run_feat
+
+            cln=`cat $cfl | grep 'set fmri(npts)'`
+            nvxchng=`echo "sed -e 's/$cln/set fmri(npts) $fvol/g' $cfl > ${cfl}_tmp"`
+            eval $nvxchng
+            mv ${cfl}_tmp $cfl
+        fi
+
+#----------------------------------------------------------------------#
+        if [ $mkdesign -eq 1 ]
+        then
+            confstr=""
+# include information of the confound file to the design
+            if [ $combconf -eq 1 ]
+            then
+                do_conf=`cat $fsfflnm | grep "set confoundev_files(1)" | cut -d\( -f2 |  cut -d\) -f1`
+                if [ $do_conf -eq 1 ]
+                then
+                    confstr=-conf
+                fi
+            fi
+
+#----------------------------------------------------------------------#
+            zval=`ptoz 0.0001`
+            if [ $cnt -eq 2 ]
+            then
+                dsgnstr=`echo "designeff $cfl $noisestr $extstr $confstr $HPstr -zval $zval -lst ${flstem}.lst -id \"$line\" -init -idnm \"$hd_ln\""`
+            else
+                dsgnstr=`echo "designeff $cfl $noisestr $extstr $confstr $HPstr -zval $zval -lst ${flstem}.lst -id \"$line\""`
+            fi
+# echo $dsgnstr
+# exit
+            eval $dsgnstr
+
+#----------------------------------------------------------------------#
+# copy design files to the specified directory
+            if [ $do_copy -eq 1 ]
+            then
+                cp_evalstr=`echo "echo $cp_path | sed -e 's/XXdateXX/$Xdate/g' -e 's/XXscanXX/scan_$Xscan/g' -e 's/XXrunXX/run$Xrun/g' "`
+                curr_cppath=`eval $cp_evalstr`
+
+                echo "copy design files to $curr_cppath"
+
+                cp ${wrtdir}/${cstem}.con      $curr_cppath/design.con
+                cp ${wrtdir}/${cstem}_cov.png  $curr_cppath/design_cov.png
+                cp ${wrtdir}/${cstem}_cov.ppm  $curr_cppath/design_cov.ppm
+                cp ${wrtdir}/${cstem}.frf      $curr_cppath/design.frf
+                cp ${wrtdir}/${cstem}.fsf      $curr_cppath/design.fsf
+                cp ${wrtdir}/${cstem}.mat      $curr_cppath/design.mat
+                cp ${wrtdir}/${cstem}.png      $curr_cppath/design.png
+                cp ${wrtdir}/${cstem}.ppm      $curr_cppath/design.ppm
+            fi
+
+# copy essential design files
+            if [ $keepdesign -eq 1 ]
+            then
+                mv ${wrtdir}/${cstem}.con ${wrtdir}/design/${cstem}.con
+                mv ${wrtdir}/${cstem}.mat ${wrtdir}/design/${cstem}.mat
+            else
+                rm ${wrtdir}/${cstem}.con
+                rm ${wrtdir}/${cstem}.mat
+            fi
+
+# coppy plots representing the design
+            if [ $keepplots -eq 1 ]
+            then
+                mv ${wrtdir}/${cstem}.png     ${wrtdir}/design/${cstem}.png
+                mv ${wrtdir}/${cstem}_cov.png ${wrtdir}/design/${cstem}_cov.png
+            else
+                rm ${wrtdir}/${cstem}.png
+                rm ${wrtdir}/${cstem}_cov.png
+            fi
+
+            rm ${wrtdir}/${cstem}.frf
+            rm ${wrtdir}/${cstem}.min
+            rm ${wrtdir}/${cstem}.trg
+            rm ${wrtdir}/${cstem}.ppm
+            rm ${wrtdir}/${cstem}_cov.ppm
+        fi
+    fi
+done < $runlst
+
+
+

@@ -1,0 +1,121 @@
+#!/bin/bash
+#
+# fsf_summary
+#
+# created: 08.05.2010
+# by wolf
+#
+
+Usage() {
+cat << EOF
+
+    Usage: $0 <fsf_file> [options]
+
+    OPTIONS:
+            -co     only display contrast names
+
+            ###########################################################
+            ##   (c) wolf zinke (2010) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+EOF
+exit 1
+
+}
+
+
+if [ $# -lt 1 ]; then
+    Usage
+else
+    fsf_fl=$1;
+    shift
+fi
+
+#__________________________________________________________________________________________#
+
+cnm_only=0
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+         -co)   cnm_only=1
+                shift
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+#__________________________________________________________________________________________#
+
+if [ ! -e $fsf_fl ]
+then
+    echo ""
+    echo "ERROR: FSF file not found!"
+    echo "       filename: $fsf_fl"
+    echo ""
+    exit
+fi
+
+if [ $cnm_only -eq 0 ]
+then
+
+    TR=`  cat $fsf_fl | grep 'fmri(tr)'         | cut -d\) -f2 | cut -d' ' -f2`
+    NV=`  cat $fsf_fl | grep 'fmri(npts)'       | cut -d\) -f2 | cut -d' ' -f2`
+    FWHM=`cat $fsf_fl | grep 'fmri(smooth'      | cut -d\) -f2 | cut -d' ' -f2`
+    HP=`  cat $fsf_fl | grep 'fmri(paradigm_hp' | cut -d\) -f2 | cut -d' ' -f2`
+
+    echo ""
+    echo "filename: $fsf_fl"
+    echo ""
+
+    echo "  TR = $TR s"
+    echo "  NV = $NV volumes"
+    echo "FWHM = $FWHM mm"
+    echo "  HP = $HP s"
+
+    evnm=`   cat $fsf_fl | grep 'fmri(evtitle'     | grep -v phase | cut -d\)  -f2 | cut -d' ' -f2`
+    convtyp=`cat $fsf_fl | grep 'fmri(convolve'    | grep -v phase | cut -d\)  -f2 | cut -d' ' -f2`
+    sigma=`  cat $fsf_fl | grep 'fmri(gammasigma'  | cut -d\) -f2  | cut -d' ' -f2`
+    phase=`  cat $fsf_fl | grep 'fmri(gammadelay'  | cut -d\) -f2  | cut -d' ' -f2`
+    deriv=`  cat $fsf_fl | grep 'fmri(deriv_yn'    | cut -d\) -f2  | cut -d' ' -f2`
+    tfilt=`  cat $fsf_fl | grep 'fmri(tempfilt_yn' | cut -d\) -f2  | cut -d' ' -f2`
+    evfl=`   cat $fsf_fl | grep 'fmri(custom'      | cut -d\) -f2  | cut -d' ' -f2`
+
+    declare -a convtyp=($convtyp)
+    declare -a sigma=($sigma)
+    declare -a phase=($phase)
+    declare -a deriv=($deriv)
+    declare -a tfilt=($tfilt)
+    declare -a evfl=($evfl)
+
+    echo ""
+    echo "Events:"
+    echo ""
+
+    printf "%6s  %-12s  %4s  %6s  %6s  %4s  %4s  %s\n" No Event-Name Conv Sigma Phase Deriv Filt File
+    cnt=0
+    for curr_nm in $evnm
+    do
+        printf "%6d  %-12s  %4d  %6.2f  %6.2f  %5d  %4d  %s\n" $(($cnt+1)) $curr_nm ${convtyp[$cnt]} ${sigma[$cnt]} ${phase[$cnt]} ${deriv[$cnt]}  ${tfilt[$cnt]}  `basename ${evfl[$cnt]}`
+        cnt=$(($cnt+1))
+    done
+
+    echo ""
+    echo "Contrasts:"
+    echo ""
+fi
+
+cnms=`   cat $fsf_fl | grep 'fmri(conname_real'     | cut -d\) -f2 | cut -d' ' -f2`
+cnt=0
+for curr_nm in $cnms
+do
+    printf "%6d  %-20s\n" $(($cnt+1))  $curr_nm
+    cnt=$(($cnt+1))
+done
