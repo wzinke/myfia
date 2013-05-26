@@ -1,0 +1,262 @@
+#!/bin/bash
+#
+# clust2MNI
+#
+# created: 26.05.2013
+# by zinke
+#
+
+Usage() {
+cat << EOF
+
+    Usage: $0 <flnm> [options]
+
+        Determines the location of clusters in the given nifti file.
+
+    OPTIONS:
+            -o      name of the MNI table (otherwise use terminal for output)
+            -lmax   use local maxima for refined information
+            -mat    apply this transformation on the coordinates
+            -ref    reference image (if not provided standard MNI space is assumed)
+            -ori    image in original image space (if input is no a nifti file)
+            -thr    use this threshold (default: minimum>0)
+            -id     identify underlying brain structure at CoG
+            -idmax  identify underlying brain structure for maximum voxel
+            -atlas  this atlas for identification (default: Harvard-Oxford)
+            -keep   do not delete temporary files
+
+            ###########################################################
+            ##   (c) wolf zinke (2013) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##   for comments and questions: wolfzinke@gmail.com     ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+EOF
+exit 1
+
+}
+ 
+# BUG: coordinate transformation with img2stdcoord give wrong results
+# TODO: implement use of local maxima
+# TODO: implement non-linear transformations
+# TODO: allow more than one atlas
+
+if [ $# -lt 1 ]; then
+    Usage
+else
+    flnm=$1;
+    shift
+fi
+ 
+#__________________________________________________________________________________________#
+
+onm="$(remove_ext $flnm)_clustID.dat"
+thr=$(fslstats $flnm -l 0 -R)
+keep_temp=0
+get_lmax=0
+refvol="$FSLDIR/data/standard/MNI152_T1_1mm_brain"
+oriimg=$flnm
+atlas="Harvard-Oxford Cortical Structural Atlas"
+do_id=0
+do_max=0
+do_p=0
+do_mask=0
+do_reg=0
+maskfl=""
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+          -o)   ostr=">> $2"
+                ohdstr="> $2"
+                shift 2
+                ;;
+       -lmax)   get_lmax=1
+                shift
+                ;;
+        -mat)   matfl=$2
+                do_reg=1
+                shift 2
+                ;;
+        -ref)   refvol=$2
+                shift 2
+                ;;
+        -ori)   oriimg=$2
+                shift 2
+                ;;
+       -mask)   maskfl=$(remove_ext $2)
+                do_mask=1
+                shift 2
+                ;;
+        -thr)   thr=$2
+                shift 2
+                ;;
+          -p)   pval=$2
+                do_p=1
+                shift 2
+                ;;
+         -id)   do_id=1
+                shift 
+                ;;
+      -idmax)   do_id=1
+                do_max=1
+                shift 
+                ;;
+      -atlas)   do_id=1
+                atlas="$2"
+                shift 2
+                ;;
+       -keep)   keep_temp=1
+                shift
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+#__________________________________________________________________________________________#
+ 
+tmpdir=`tmpnam tmpCLUSTERMNI`
+rm $tmpdir
+mkdir $tmpdir
+
+#__________________________________________________________________________________________#
+
+if [ $(imtest $flnm) -eq 1 ]
+then
+    if [ $do_mask -eq 1 ]
+    then
+        fslmaths $flnm -mas $maskfl $tmpdir/flin
+        flnm=$tmpdir/flin
+        maskstr="-mask $maskfl"
+    fi
+
+    flstem=`basename $flnm`
+    flstem=`remove_ext $flstem`
+
+    if [ $do_reg -eq 1 ]
+    then
+        do_reg=0
+        if [ $do_p -eq 1 ]
+        then
+            mstr="-mat $matfl"
+        else
+            mstr="-x $matfl --stdvol=$refvol"
+        fi
+    fi
+
+    if [ $do_p -eq 1 ]
+    then
+        cluster_thr -l "$flnm" -o $tmpdir -z $thr -p $pval $maskstr $mstr
+        cltbl=$tmpdir/${flstem}_cluster.txt
+    else
+        cluster -i $flnm -t $thr --mm --olmax=$tmpdir/locmax.dat  $mstr > $tmpdir/clusttbl.dat
+        cltbl=$tmpdir/clusttbl.dat
+    fi
+else
+    cltbl=$flnm
+fi
+
+if [ $(cat $cltbl | grep '(xm)' | wc -w) -gt 0 ]
+then
+    dimstr="-mm"
+else
+    dimstr="-vox"
+fi
+
+cat $cltbl | grep -v luster  > $tmpdir/clustloc.dat
+
+cNM=""
+IDHDstr=""
+while read zeile
+do
+    ncol=$(echo "$zeile" | wc -w)
+
+    if [ $ncol -eq 9 ]
+    then
+        cID=$( echo $zeile | cut -d' ' -f1)
+        cVXL=$(echo $zeile | cut -d' ' -f2)
+        cMAX=$(echo $zeile | cut -d' ' -f3)
+        cMX=$( echo $zeile | cut -d' ' -f4)
+        cMY=$( echo $zeile | cut -d' ' -f5)
+        cMZ=$( echo $zeile | cut -d' ' -f6)
+        cCX=$( echo $zeile | cut -d' ' -f7)
+        cCY=$( echo $zeile | cut -d' ' -f8)
+        cCZ=$( echo $zeile | cut -d' ' -f9)
+    elif [ $ncol -eq 11 ]
+    then
+        cID=$( echo $zeile | cut -d' ' -f1)
+        cVXL=$(echo $zeile | cut -d' ' -f2)
+        cPv=$( echo $zeile | cut -d' ' -f3)
+        cPl=$( echo $zeile | cut -d' ' -f4)
+        cMAX=$(echo $zeile | cut -d' ' -f5)
+        cMX=$( echo $zeile | cut -d' ' -f6)
+        cMY=$( echo $zeile | cut -d' ' -f7)
+        cMZ=$( echo $zeile | cut -d' ' -f8)
+        cCX=$( echo $zeile | cut -d' ' -f9)
+        cCY=$( echo $zeile | cut -d' ' -f10)
+        cCZ=$( echo $zeile | cut -d' ' -f11)
+    else
+        echo "ERROR: Unknown number of collumns ($ncol)!"
+        exit 1
+    fi
+ 
+    if [ $do_reg -eq 1 ]
+    then
+        if [ $(imtest $oriimg) -eq 0 ]
+        then
+            echo "ERROR: Image file in native image space has to be provided with the -ori option!"
+            exit 1
+        fi
+        ncCOOR=$(echo "$cMX $cMY $cMZ" | img2stdcoord  -img $flnm -std $refvol $dimstr -)
+        cMX=$( echo $ncCOOR | cut -d' ' -f1)
+        cMY=$( echo $ncCOOR | cut -d' ' -f2)
+        cMZ=$( echo $ncCOOR | cut -d' ' -f3)
+        ncCOOR=$(echo "$cCX $cCY $cCZ" | img2stdcoord  -img $flnm -std $refvol $dimstr -)
+        cCX=$( echo $ncCOOR | cut -d' ' -f1)
+        cCY=$( echo $ncCOOR | cut -d' ' -f2)
+        cCZ=$( echo $ncCOOR | cut -d' ' -f3)
+    fi
+
+    if [ $do_id -eq 1 ]
+    then
+        if [ $do_max -eq 1 ]
+        then
+            cNM=$(atlasquery -a "$atlas" -c $cMX,$cMY,$cMZ | cut -d'>' -f4)
+        else
+            cNM=$(atlasquery -a "$atlas" -c $cCX,$cCY,$cCZ | cut -d'>' -f4)
+        fi
+
+        IDHDstr=$(echo "$atlas" | sed -e 's/ /_/g')
+    fi
+
+    if [ $ncol -eq 9 ]
+    then
+        printf "%3d %5d %8.4f %6.2f %6.2f %6.2f %6.2f %6.2f %6.2f    %s\n" $cID $cVXL $cMAX $cMX $cMY $cMZ $cCX $cCY $cCZ "$cNM" >> $tmpdir/mnitbl.dat
+    else
+        printf "%3d %5d %8.4f %8.4f %8.4f %6.2f %6.2f %6.2f %6.2f %6.2f %6.2f    %s\n" $cID $cVXL $cMAX $cPv $cPl $cMX $cMY $cMZ $cCX $cCY $cCZ "$cNM" >> $tmpdir/mnitbl.dat
+    fi
+done < $tmpdir/clustloc.dat
+
+
+# create output
+if [ $ncol -eq 9 ]
+then
+    eval "printf \"%3s %5s %8s %6s %6s %6s %6s %6s %6s    %s\n\" ID voxel MaxVal max_X max_Y max_Z cog_X cog_Y cog_Z  $IDHDstr $ohdstr"
+else
+    eval "printf \"%3s %5s %8s %8s %8s %6s %6s %6s %6s %6s %6s    %s\n\" ID voxel MaxVal p_value log_p max_X max_Y max_Z cog_X cog_Y cog_Z  $IDHDstr $ohdstr"
+fi
+
+eval "cat $tmpdir/mnitbl.dat $ostr"
+
+#__________________________________________________________________________________________#
+
+if [ $keep_temp -eq 0 ]
+then
+    rm -r $tmpdir
+fi

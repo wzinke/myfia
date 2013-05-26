@@ -17,6 +17,7 @@ cat << EOF
             -l      list of files that should be thresholded
             -d      directory of files
             -o      output directory
+            -fout   provide full output files
             -z      threshold of z maps (default `ptoz 0.01`)
             -p      cluster p-threshold for significance (default 0.01)
             -conn   connectivity of voxels (default 26)
@@ -24,6 +25,7 @@ cat << EOF
             -sf     suffix
             -out    output stem
             -mask   mask images
+            -mat    specify transformation matrix to get voume to standard space
             -bck    specify background image for slice plotting
             -keep   do not delete temporary files
 
@@ -38,6 +40,7 @@ exit 1
 
 }
 
+
 #__________________________________________________________________________________________#
 keep_temp=0
 get_mask=1
@@ -51,6 +54,10 @@ fl_dir=`pwd`
 odir=clust_thr
 prefix=''
 suffix=''
+matstr=""
+fullout=0
+outstr=""
+
 
 while [ $# -gt 0 ] ;
 do
@@ -65,6 +72,9 @@ do
           -o)   odir=$2
                 shift 2
                 ;;
+       -fout)   fullout=1
+                shift
+                ;;
           -z)   zthr=$2
                 shift 2
                 ;;
@@ -78,6 +88,9 @@ do
                 shift 2
                 ;;
          -pf)   prefix=$2
+                shift 2
+                ;;
+        -mat)   matstr="-x $2 --stdvol=$FSLDIR/data/standard/MNI152_T1_1mm_brain"
                 shift 2
                 ;;
        -mask)   maskfl=`remove_ext $2`
@@ -116,7 +129,7 @@ then
 fi
 
 printf "%24s %-10s %-8s %-8s %-8s %-10s %-8s %-8s %-8s \n" File Num_vxl p z num_active  minval maxval robmin robmax> $odir/p_info.dat
-printf "%24s %-10s %-8s %-8s %-8s %-10s %-8s %-8s %-8s \n" File Num_vxl p z num_active minval maxval robmin robmax
+# printf "%24s %-10s %-8s %-8s %-8s %-10s %-8s %-8s %-8s \n" File Num_vxl p z num_active minval maxval robmin robmax
 
 # zthr=`ptoz $pthr`
 
@@ -151,9 +164,19 @@ do
     VOLUME=`echo $SM | awk '{print $4}'`
     RESELS=`echo $SM | awk '{print $6}'`
 
-    cluster -i $tmpdir/thresh_zmap -t $zthr -p $pthr -d $DLH --volume=$VOLUME --othresh=$onm -o ${onm}_cluster_mask --opvals=${onm}_pvals --connectivity=$c --olmaxim=${onm}_lmax --mm --olmax=${onm}_lmax.txt --minclustersize > ${onm}_cluster.txt
+    if [ $fullout -eq 1 ]
+    then
+        outstr=" --opvals=${onm}_pvals --olmax=${onm}_lmax.txt"
+    fi
+
+    cluster -i $tmpdir/thresh_zmap -t $zthr -p $pthr -d $DLH --volume=$VOLUME --othresh=$onm --connectivity=$c --olmaxim=${onm}_lmax -o ${onm}_cluster_mask --mm $matstr $outstr > ${onm}_cluster.txt
 
     num_active=`fslstats ${onm}_cluster_mask -V | awk '{print $1}'`
+
+    if [ $fullout -eq 0 ]
+    then
+        imrm ${onm}_cluster_mask
+    fi
 
     if [ $num_active -gt 0 ]
     then
@@ -183,7 +206,7 @@ do
     fi
 
     printf "%24s %-10d %-8.6f %-8.6f %-10d %-8.4f %-8.4f %-8.4f %-8.4f \n" $flnm $num_vxl $pthr $zthr $num_active $minval $maxval $robminval $robmaxval >> $odir/p_info.dat
-    printf "%24s %-10d %-8.6f %-8.6f %-10d %-8.4f %-8.4f %-8.4f %-8.4f \n" $flnm $num_vxl $pthr $zthr $num_active $minval $maxval $robminval $robmaxval
+#     printf "%24s %-10d %-8.6f %-8.6f %-10d %-8.4f %-8.4f %-8.4f %-8.4f \n" $flnm $num_vxl $pthr $zthr $num_active $minval $maxval $robminval $robmaxval
 done
 
 #__________________________________________________________________________________________#
