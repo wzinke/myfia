@@ -1,0 +1,101 @@
+#!/usr/bin/env python
+
+# run searchlight analysis.
+
+###########################################################
+##   (c) wolf zinke (2012) - part of the MaFIA toolbox   ##
+##         > MAcaque Functional Image Analysis <         ##
+##            Licensed under the MIT license             ##
+###########################################################
+
+#########################################################################
+### import python modules
+import os
+import argparse
+
+#########################################################################
+### get command line arguments
+
+parser = argparse.ArgumentParser(description='Run searchlight analysis on a data set.')
+parser.add_argument('ds',  help='data set')
+parser.add_argument('-attr',  required=True, help='attribute file')
+parser.add_argument('-mask',  default=None, help='mask file')
+parser.add_argument('-nz',    action='store_false', default=True)
+parser.add_argument('-cnd',   help='targets for subset', action='append', default=[])
+parser.add_argument('-clf',   default="smlr", help='Classier (knn, svm, nusvm, smlr)')
+parser.add_argument('-rad',   default=3, type=int, help='radius of the searchlight sphere')
+parser.add_argument('-ts',    default=2, type=int, help='number of runs used as test set')
+parser.add_argument('-nproc', dest='NumProc', default=1, type=int, help='Number of parallel processes')
+parser.add_argument('-odir',  default=os.getcwd(), help='output directory')
+parser.add_argument('-onm',   default="MVPA_SL",   help='output file name')
+parser.add_argument('-hdf',   action='store_false', default=True, help='Save all processing steps also as hdf5 file')
+
+cla = parser.parse_args()
+
+#########################################################################
+### load modules necessary for searchlight analysis
+
+import numpy as np
+
+from mvpa2.datasets.mri         import map2nifti
+from mvpa2.generators.partition import NFoldPartitioner
+from mvpa2.measures.base        import CrossValidation
+from mvpa2.measures.searchlight import sphere_searchlight
+from mvpa2.misc.errorfx         import mean_match_accuracy, mean_mismatch_error
+from mvpa2.misc.io              import SampleAttributes
+from mvpa2.datasets.mri         import fmri_dataset
+from mvpa2.mappers.zscore       import zscore
+from mvpa2.mappers.fx           import mean_sample
+from mvpa2.clfs.smlr            import SMLR
+from mvpa2.clfs.svm             import LinearNuSVMC, LinearCSVMC
+from mvpa2.clfs.knn             import kNN
+from mvpa2.misc.plot.base       import plot_samples_distance
+
+#########################################################################
+### run searchlight analysis
+
+# load two column text file specifying data attributes
+attr = SampleAttributes(cla.attr)
+ 
+# load data set
+ds = fmri_dataset(cla.ds, targets=attr.targets, chunks=attr.chunks, mask=cla.mask)
+
+# apply zsoring run-wise
+if cla.nz:
+    zscore(ds, chunks_attr='chunks')
+
+# take subset of the data
+if len(cla.cnd) > 0:
+    cds = ds[np.in1d(ds.T,cla.cnd)]
+else:
+    cds = ds
+
+# specify the classifier
+if cla.clf == "knn":
+    clf  = kNN()
+elif cla.clf == "svm":
+     clf  = LinearCSVMC()
+elif cla.clf == "nusvm":
+    clf  = LinearNuSVMC()
+elif cla.clf == "smlr":
+    clf  = SMLR()
+
+# method to splitt data into training and test sets
+splt = NFoldPartitioner(cvtype=cla.ts, attr='chunks')
+
+# prepare crossvalidation routine
+cv = CrossValidation(clf, splt, errorfx=mean_match_accuracy)
+
+# set up searchlight analysis
+sl = sphere_searchlight(cv, radius=cla.rad, space='voxel_indices', nproc=cla.NumProc, enable_ca=['roi_sizes'])
+
+# run searchlight analysis
+sl_map = sl(cds)  # this starts the search light analysis with the previosly specified parameters
+
+# save results as nifti files
+niftiresults = map2nifti(sl_map, imghdr=ds.a.imghdr)
+niftiresults.to_filename(os.path.join(cla.odir, cla.onm+'.nii.gz'))
+
+#########################################################################
+if __name__ == "__mvpa_searchlight__":
+    mvpa_SL_split()
