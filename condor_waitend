@@ -81,7 +81,7 @@ SECONDS=0
 
 for csub in $sbmfl
 do
-    echo "Processing: $csub"
+    echo ">> Processing: $csub"
     if [ $runloc -eq 0 ]
     then
             jid=`condor_submit $csub`
@@ -194,4 +194,6 @@ if [ $waitend -eq 1 ]
 then
     usedtime=`printf ""%dh:%dm:%ds"\n" $(($SECONDS/3600)) $(($SECONDS%3600/60)) $(($SECONDS%60))`
     echo "... that took about $usedtime to complete $sbmfl (p/m $itv s)"
+    echo " "
 fi
+

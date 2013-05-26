@@ -135,10 +135,13 @@ do
     esac
 done
 
-if [ ! -e ${rsmpl_hdr}* ]
+if [ $do_hdr -eq 1 ]
 then
-    echo "ERROR: reference header $rsmpl_hdr does not exist!"
-    exit
+    if [ ! -e ${rsmpl_hdr}* ]
+    then
+        echo "ERROR: reference header $rsmpl_hdr does not exist!"
+        exit
+    fi
 fi
 
 #----------------------------------------------------------------------#
@@ -175,7 +178,7 @@ if [ -e "$ref" ]
 then
     imcp $ref $reffl              # copy reference into temp directory
 else
-    fslroi $datfl $reffl $ref 1   # extract reference volume
+    fslroi $flnm $reffl $ref 1   # extract reference volume
     if [ $sm_fwhm != 0 ]
     then
         krnl=`fwhm2sigma $sm_fwhm`

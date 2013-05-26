@@ -464,6 +464,13 @@ else # use randomize for a non-parametric test
     if [ $do1smpl -gt 1 ]
     then
         designstr=" -d $tmpdir/ttest.mat -t $tmpdir/ttest.con"
+    else
+        if [ $numPTS -lt 20 ]
+        then
+            designstr="-1 -v 5"
+        else
+            designstr="-1 "
+        fi
     fi
 
     if [ $num_perm -eq 1 ]
@@ -473,7 +480,7 @@ else # use randomize for a non-parametric test
         permstr="-T"
     fi
 
-    if [ run_grid - we 1  ]
+    if [ $run_grid -eq 1  ]
     then
         FSLPARALLEL=condor
         randomise_parallel -i $tmpdir/testset -o $outfl  $designstr -m $maskfl $permstr -n $num_perm -C 2.3 -x

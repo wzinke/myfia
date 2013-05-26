@@ -76,18 +76,18 @@ done
 if [ $do_shim -eq 0 ]
 then
 
-eval "echo 'Executable = $execut
+echo "Executable = $execut
 Universe = vanilla
 initialdir = $inidir
 request_cpus = $ncpu
 request_memory = $memuse
 getenv = True
 notification = Never
-' $ostr"
+" $ostr
 
 else
 
-eval "echo 'universe = vanilla
+echo "universe = vanilla
 executable = /usr/lib/condor/shim_dmtcp
 should_transfer_files = YES
 when_to_transfer_output = ON_EXIT_OR_EVICT
@@ -101,6 +101,6 @@ initialdir = $inidir
 request_cpus = $ncpu
 request_memory = $memuse
 getenv = True
-' $ostr"
+" $ostr
 
 fi
