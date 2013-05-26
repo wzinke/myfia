@@ -160,13 +160,9 @@ do
 
         if [ $do_plot -eq 1 ]
         then
-            if which latex2html >/dev/null; then
-                vol_slicer ${bckfl} -stat $onm -statrng $robminval $robmaxval -thick -noside  -out ${onm}.png
-            else
-                overlay 1 0 ${bckfl}.nii.gz -a $onm $robminval $robmaxval $tmpdir/rendered
-                slice_set $tmpdir/rendered -u -s 2 -out ${onm}.png
-            fi
+            vol_slicer ${bckfl} -stat $onm -statrng $zthr $robmaxval -thick -noside  -out ${onm}.png
         fi
+
     else
         minval=0
         maxval=0

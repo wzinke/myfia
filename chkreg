@@ -13,7 +13,7 @@ cat << EOF
 
     OPTIONS:
             -aff    use an additional affine transformation
-            -keep   don't delete temporary files when finished
+            -keep   don't delete temporary files when finished (for debugging)
 
             ###########################################################
             ##   (c) wolf zinke (2011) - part of the MaFIA toolbox   ##

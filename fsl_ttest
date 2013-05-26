@@ -21,6 +21,7 @@ cat << EOF
             -C      If a third sample is provided, a tripled t-test will be done
             -v      test one sample against this numeric value
             -m      use this mask file
+            -sm     apply spatial smoothing with given fwhm prior to the test
             -nperm  number of permutations (sets to non-parametric test)
             -do     create designs only (NIY!)
             -p      make a paired test (both samples must have the same size)
@@ -58,6 +59,7 @@ get_mask=1
 get_grpmn=0
 num_perm=1
 run_grid=0
+smstr=""
 
 tmpdir=`tmpnam tmp_ttest`
 rm $tmpdir
@@ -84,6 +86,9 @@ do
                 ;;
           -m)   maskfl=$2
                 get_mask=0
+                shift 2
+                ;;
+          -sm)  smstr="-s $(fwhm2sigma $2)"
                 shift 2
                 ;;
       -nperm)   num_perm=$2
@@ -134,24 +139,26 @@ then
 else
     fslmerge -t $tmpdir/testset $smplA $smplB $smplC
 fi
-
+ 
 nA=`fslnvols $smplA`
 numPTS=$nA
 
-
 if [ $get_mask -eq 1 ]
 then
-    fslmaths $tmpdir/testset -Tmin -bin $tmpdir/testset_mask -odt char
+    fslmaths $tmpdir/testset -abs -Tmax $tmpdir/testset_allmax 
+    fslmaths $tmpdir/testset -abs -Tmin $tmpdir/testset_allmin 
+    fslmaths $tmpdir/testset_allmax -sub -Tmax $tmpdir/testset_allmin -bin $tmpdir/testset_mask --odt char
     maskfl=$tmpdir/testset_mask
 fi
 
-if [ $tflame -eq 1 ]  # bloody inconsistencies of argument specification in fsl tools
-then
-    maskstr="--mask=$maskfl"
-else
-    maskstr="-m $maskfl"
-fi
+# if [ $tflame -eq 1 ]  # bloody inconsistencies of argument specification in fsl tools
+# then
+#     maskstr="--mask=$maskfl"
+# else
+#     maskstr="-m $maskfl"
+# fi
 
+fslmaths $tmpdir/testset -mas $maskfl $smstr $tmpdir/testset
 
 if [ $do1smpl -gt 1 ]
 then
@@ -450,7 +457,7 @@ then
 
 #  flameo --cope=$tmpdir/testset --mask=$maskfl --dm=$tmpdir/ttest.mat --tc=$tmpdir/ttest.con --cs=$tmpdir/ttest.grp --runmode=fe
 
-    fsl_glm -i $tmpdir/testset -d $tmpdir/ttest.mat -c $tmpdir/ttest.con -o $outfl --out_z=${outfl}_zstat --out_t=${outfl}_tstat 
+    fsl_glm -i $tmpdir/testset -d $tmpdir/ttest.mat -c $tmpdir/ttest.con -o $outfl --out_z=${outfl}_zstat --out_t=${outfl}_tstat -m $maskfl
 
 else # use randomize for a non-parametric test
 
@@ -469,10 +476,10 @@ else # use randomize for a non-parametric test
     if [ run_grid - we 1  ]
     then
         FSLPARALLEL=condor
-        randomise_parallel -i $tmpdir/testset -o $outfl  $designstr $maskstr $permstr -n $num_perm -C 2.3 -x
+        randomise_parallel -i $tmpdir/testset -o $outfl  $designstr -m $maskfl $permstr -n $num_perm -C 2.3 -x
 
     else
-        randomise -i $tmpdir/testset -o $outfl  $designstr $maskstr $permstr -n $num_perm -C 2.3 -x
+        randomise -i $tmpdir/testset -o $outfl  $designstr -m $maskfl  $permstr -n $num_perm -C 2.3 -x
     fi
 
 fi

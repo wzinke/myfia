@@ -10,23 +10,29 @@ cat << EOF
             -x -y -z            specify set of slices to save as image (e.g. -z "2 4 6 8 10")
                                 numbers > 1 specify slicenumbers, numbers < 1 specify proportions.
             -cog, -max          determines location of Center of gravity or voxel with maximum value
-                                as voxel coordinate, will override specifications for each voxel location
-            -set                set of proportional slice numbers that are used for all three dimensions.
+                                as voxel coordinate.
+                                This will override specifications for each voxel location.
+            -set                set of proportional slice numbers that are used for all
+                                three dimensions (default: "0.2 0.3 0.4 0.5 0.6 0.7 0.8").
                                 this option is only effective when -x/y/z are not specified.
             -stat <flnm>        statistical map
+            -mat  <flnm>        provide a transformation matrix to get the overlay image into 
+                                the space of the background image
+            -rsmpl              resample overlay image to match resolution of background image.
+                                this assumes that both images are in the same space.
             -trans              transparent colors
-            -pxl                number of pixels seperating two images (default:10)
+            -pxl                number of pixels seperating two images (default:5)
             -thick              increase width of slice line
             -neg                render also the negative stat map
             -noside             do not show right side label
             -nomm               print slice distance from center voxel
             -cx                 for single voxel display overlay slice selections on stat maps
             -s <sclfctr>        scaling factor
-            -bgint <min max>    intensity range for the background image
+            -bgint   <min max>  intensity range for the background image
             -statrng <min max>  color range for the overlay
             -statmin <min>      minimum threshold of the overlay color range
             -out  <outname>     filename for output data
-            -keep               do not delete temporary files
+            -keep               do not delete temporary files (for debugging)
 
 
             ###########################################################
@@ -39,7 +45,8 @@ EOF
     exit 1
 }
 
-# ToDo" Get Rid Of xstr/ystr/zstr ...
+# TODO: Get Rid Of xstr/ystr/zstr ...
+# TODO: Add optional table describing peak locations and max stat values of patches (positie and negative)
 
 #----------------------------------------------------------------------#
 if [ $# -lt 1 ]; then
@@ -49,6 +56,7 @@ else
     shift
 fi
 
+#----------------------------------------------------------------------#
 text2png(){
     if [ $# -lt 3 ]
     then
@@ -59,19 +67,20 @@ text2png(){
     echo "$1" | convert -font Palatino-Bold -background black -pointsize $ptsz -fill LightYellow -trim text:- $2
 }
 
-
 #----------------------------------------------------------------------#
 outnm="${bg_img}_sliceselection.png"
 bgint=`fslstats $bg_img -r`
 # smint="3 10"
 
+minpxl=5
 scl=1
-pxl=10
 sdlbl=""
 trans=0
+get_pxl=1
 do_keep=0
 do_neg=0
 do_thick=0
+do_flirt=0
 tmpdir=`tmpnam tmpPSC`
 xstr=""
 ystr=""
@@ -83,7 +92,7 @@ no_min=0
 doMM=1
 doCX=0
 SglVXL=1
-def_set="0.2 0.3 0.4 0.5 0.6 0.7 0.8"
+def_set="0.2 0.3 0.4 0.5 0.6 0.7 0.8" 
 get_coord=0
 usedefset=1
 ovly_stat=0
@@ -119,6 +128,14 @@ do
                 ;;
       -set)     def_set=$2
                 shift 2
+                ;;
+      -mat)     transmat=$2
+                do_flirt=1
+                shift 2
+                ;;
+      -rsmpl)   transmat=$FSLDIR/etc/flirtsch/ident.mat
+                do_flirt=1
+                shift
                 ;;
       -max)     get_coord=1
                 coorstr="-x"
@@ -164,6 +181,7 @@ do
                 shift
                 ;;
        -pxl)    pxl=$2
+                get_pxl=0
                 shift 2
                 ;;
        -keep)   do_keep=1
@@ -179,16 +197,166 @@ do
 done
 
 #----------------------------------------------------------------------#
+mkdir $tmpdir;
+
+#----------------------------------------------------------------------#
+# coregister overlay statistics to background image
+if [ $ovly_stat -eq 1 ]
+then
+    if [ $do_flirt -eq 1 ]
+    then
+        flirt -in $statmap -ref $bg_img -init $transmat -applyxfm -o $tmpdir/ovstats_coreg -interp spline
+        statmap="$tmpdir/ovstats_coreg"
+    fi
+fi
+
+#----------------------------------------------------------------------#
+# crop background image to avoid empty space (TODO: Crop selected slices only)
+Xsz=`fslval $bg_img dim1`
+Ysz=`fslval $bg_img dim2`
+Zsz=`fslval $bg_img dim3`
+
+bckfov=$(fslstats $bg_img -w)
+
+xmin=$(echo $bckfov | cut -d' ' -f1)
+xmax=$(echo $bckfov | cut -d' ' -f2)
+ymin=$(echo $bckfov | cut -d' ' -f3)
+ymax=$(echo $bckfov | cut -d' ' -f4)
+zmin=$(echo $bckfov | cut -d' ' -f5)
+zmax=$(echo $bckfov | cut -d' ' -f6)
+
+# correct X-ccordinates
+xmn=$(echo "$xmin -1" | bc -l)
+xmx=$(echo "$xmax +2" | bc -l)
+if [ $xmn -lt 0 ]
+then
+    xmx=$(echo "$xmx + $xmn")
+    xmn=0
+fi
+if [ $(($xmx+$xmin)) -gt $Xsz ]
+then
+    xmx=$(echo "$Xsz - $xmn" | bc -l)
+fi
+
+if [ "$xstr" ]
+then
+    nslc=""
+    for cslc in $xslc
+    do
+        if [ $(echo "$cslc > 1" | bc -l) -eq 1 ]
+        then
+            cnslc=$(echo "$cslc - $xmn " | bc -l)
+            nslc="$nslc $cnslc "
+        else
+            nslc="$nslc $cnslc "
+        fi
+    done
+    xslc="$nslc"
+fi
+
+# correct Y-ccordinates
+ymn=$(echo "$ymin -1" | bc -l)
+ymx=$(echo "$ymax +2" | bc -l)
+if [ $ymn -lt 0 ]
+then
+    ymx=$(echo "$ymx + $ymn")
+    ymn=0
+fi
+if [ $(($ymx+$ymin)) -gt $Ysz ]
+then
+    ymx=$(echo "$Ysz - $ymn" | bc -l)
+fi
+
+if [ "$ystr" ]
+then
+    nslc=""
+    for cslc in $yslc
+    do
+        if [ $(echo "$cslc > 1" | bc -l) -eq 1 ]
+        then
+            cnslc=$(echo "$cslc - $ymn " | bc -l)
+            nslc="$nslc $cnslc "
+        else
+            nslc="$nslc $cnslc "
+        fi
+    done
+    yslc="$nslc"
+fi
+
+# correct Z-ccordinates
+zmn=$(echo "$zmin -1" | bc -l)
+zmx=$(echo "$zmax +2" | bc -l)
+if [ $zmn -lt 0 ]
+then
+    zmx=$(echo "$zmx + $zmn")
+    zmn=0
+fi
+if [ $(($zmx+$zmin)) -gt $Zsz ]
+then
+    zmx=$(echo "$Zsz - $zmn" | bc -l)
+fi
+
+if [ "$zstr" ]
+then
+    nslc=""
+    for cslc in $zslc
+    do
+        if [ $(echo "$cslc > 1" | bc -l) -eq 1 ]
+        then
+            cnslc=$(echo "$cslc - $zmn " | bc -l)
+            nslc="$nslc $cnslc "
+        else
+            nslc="$nslc $cnslc "
+        fi
+    done
+    zslc="$nslc"
+fi
+
+### crop now
+fslroi $bg_img $tmpdir/bck_crop $xmn $xmx $ymn $ymx $zmn $zmx
+bg_img="$tmpdir/bck_crop"
+if [ $ovly_stat -eq 1 ]
+then
+    fslroi $statmap $tmpdir/ovstats_crop $xmn $xmx $ymn $ymx $zmn $zmx
+    statmap="$tmpdir/ovstats_crop"
+fi
+
+# get new image dimensions
+Xsz=$xmx
+Ysz=$ymx
+Zsz=$zmx
+
+# determine point size of text according to image size
+# maxsz=$(echo "max(c($Xsz,$Ysz,$Zsz))" | R --vanilla --slave | cut -d' ' -f2)
+# maxsz=$(echo "RES=max( [$Xsz,$Ysz,$Zsz]); disp(RES);" | octave --silent --no-window-system -f -H)
+maxsz=$(echo "$Xsz,$Ysz,$Zsz" | awk '{ for (i=1; i<=$NF; i++) max=($i>max)?$i:max; } END { printf("%d\n", max); }')
+
+ptsz=`echo "$maxsz * 0.2" | bc -l | xargs printf "%1.0f"`
+
+if [ $ptsz -lt 10 ]
+then
+    ptsz=10
+fi
+
+
+if [ $get_pxl -eq 1 ]
+then
+pxl=`echo "$maxsz * 0.01" | bc -l | xargs printf "%1.0f"`
+    if [ $pxl -lt $minpxl ]
+    then
+        pxl=$minpxl
+    fi
+fi
+
+#----------------------------------------------------------------------#
 # determine voxel location of CoG or Max
 if [ $get_coord -eq 1 ]
 then
     if [ $ovly_stat -eq 1 ]
     then
-        coords=`fslstats $statmap $coorstr`
-    echo "fslstats $statmap $coorstr"
+        coords=$(fslstats $statmap $coorstr)
     else
-        coords=`fslstats $bg_img $coorstr`
-    echo "fslstats $bg_img $coorstr"
+        coords=$(fslstats $bg_img $coorstr)
     fi
 
     X=`echo $coords | awk '{print $1}'| xargs printf "%1.0f"`
@@ -215,8 +383,6 @@ then
     fi
 fi
 
-mkdir $tmpdir;
-
 slcfl=`echo $outnm | sed -e 's/.png/.slc/g'`
 echo  "bgimg: $bg_img" > $slcfl
 slcsc=`echo "$scl / 2" | bc -l`
@@ -228,14 +394,6 @@ then
 fi
 
 #----------------------------------------------------------------------#
-Xsz=`fslval $bg_img dim1`
-Ysz=`fslval $bg_img dim2`
-Zsz=`fslval $bg_img dim3`
-
-numX=0
-numY=0
-numZ=0
-
 # if no slices are specified, use the default set of relative slices
 # if [ "Z$xstr$ystr$zstr" == 'Z' ]
 
@@ -265,6 +423,10 @@ fi
 #----------------------------------------------------------------------#
 # test whether just a single voxel is specified and
 # if proportional slices are specified determine corresponding slice number
+numX=0
+numY=0
+numZ=0
+
 # x
 if [ "$xstr" ]
 then
@@ -462,7 +624,7 @@ then
         if [ $cslc -gt $Xsz ]
         then
             echo ""
-            echo "ERROR: Selected slice <$cslc> exceed number of slices in X dimension"
+            echo "ERROR: Selected slice <$cslc> exceeds number of slices in X dimension"
             echo ""
             rm -r $tmpdir
             exit
@@ -476,7 +638,7 @@ then
 
         if [ $doMM -eq 1 ]
         then
-            montage -geometry +0+0 -font Palatino-Bold -background black  -fill LightYellow -pointsize 12 -label "$cvxlMM mm"   $tmpdir/X_${cslc}.png $tmpdir/X_${cslc}.png
+            montage -geometry +0+0 -font Palatino-Bold -background black  -fill LightYellow -pointsize $ptsz -label "$cvxlMM mm"   $tmpdir/X_${cslc}.png $tmpdir/X_${cslc}.png
         fi
 
         cnt=$(($cnt+1))
@@ -536,7 +698,7 @@ then
         if [ $cslc -gt $Ysz ]
         then
             echo ""
-            echo "ERROR: Selected slice <$cslc> exceed number of slices in Y dimension"
+            echo "ERROR: Selected slice <$cslc> exceeds number of slices in Y dimension"
             echo ""
             rm -r $tmpdir
             exit
@@ -550,7 +712,7 @@ then
 
         if [ $doMM -eq 1 ]
         then
-            montage -geometry +0+0 -font Palatino-Bold -background black  -fill LightYellow -pointsize 12 -label "$cvxlMM mm"   $tmpdir/Y_${cslc}.png $tmpdir/Y_${cslc}.png
+             montage -geometry +0+0 -font Palatino-Bold -background black  -fill LightYellow -pointsize $ptsz -label "$cvxlMM mm"   $tmpdir/Y_${cslc}.png $tmpdir/Y_${cslc}.png
         fi
 
         cnt=$(($cnt+1))
@@ -609,7 +771,7 @@ then
         if [ $cslc -gt $Zsz ]
         then
             echo ""
-            echo "ERROR: Selected slice <$cslc> exceed number of slices in Z dimension"
+            echo "ERROR: Selected slice <$cslc> exceeds number of slices in Z dimension"
             echo ""
             rm -r $tmpdir
             exit
@@ -623,7 +785,7 @@ then
 
         if [ $doMM -eq 1 ]
         then
-            montage -geometry +0+0 -font Palatino-Bold -background black  -fill LightYellow -pointsize 12 -label "$cvxlMM mm"   $tmpdir/Z_${cslc}.png $tmpdir/Z_${cslc}.png
+            montage -geometry +0+0 -font Palatino-Bold -background black  -fill LightYellow -pointsize $ptsz -label "$cvxlMM mm"   $tmpdir/Z_${cslc}.png $tmpdir/Z_${cslc}.png
         fi
 
         cnt=$(($cnt+1))
@@ -668,14 +830,14 @@ if [ $ovly_stat -eq 1 ]
 then
     declare -a zthr=($smint)
 
-    text2png "${zthr[0]}" $tmpdir/lowZ.gif 14
-    text2png "${zthr[1]}" $tmpdir/high.gif 14
+    text2png "${zthr[0]}" $tmpdir/lowZ.gif $ptsz
+    text2png "${zthr[1]}" $tmpdir/high.gif $ptsz
 
 
     if [ $do_neg -eq 1 ]
     then
-        text2png "-${zthr[0]}" $tmpdir/nlowZ.gif 14
-        text2png "-${zthr[0]}" $tmpdir/nhigh.gif 14
+        text2png "-${zthr[0]}" $tmpdir/nlowZ.gif $ptsz
+        text2png "-${zthr[0]}" $tmpdir/nhigh.gif $ptsz
         pngappend $tmpdir/nhigh.gif + 5 $FSLDIR/etc/luts/ramp2.gif + 10 $tmpdir/nlowZ.gif + 25 $tmpdir/lowZ.gif + 5 $FSLDIR/etc/luts/ramp.gif + 5 $tmpdir/high.gif $tmpdir/zinfo.gif
     else
         pngappend $tmpdir/lowZ.gif + 5 $FSLDIR/etc/luts/ramp.gif + 5 $tmpdir/high.gif $tmpdir/zinfo.gif
@@ -689,25 +851,28 @@ if [ $set_cnt -gt 1 ]
 then
     if [ $SglVXL -eq 1 ]
     then
-        xstr=`printf "X: %6d [%6.2f mm]" $xslc $mmX`
-        ystr=`printf "Y: %6d [%6.2f mm]" $yslc $mmY`
-        zstr=`printf "Z: %6d [%6.2f mm]" $zslc $mmZ`
+        xstr=`printf "X: %6d [%6.2f mm]" $(($xslc+$xmn)) $mmX`
+        ystr=`printf "Y: %6d [%6.2f mm]" $(($yslc+$ymn)) $mmY`
+        zstr=`printf "Z: %6d [%6.2f mm]" $(($zslc+$zmn)) $mmZ`
 
-        text2png "$xstr" $tmpdir/Xvxlpos.png 12
-        text2png "$ystr" $tmpdir/Yvxlpos.png 12
-        text2png "$zstr" $tmpdir/Zvxlpos.png 12
+        text2png "$xstr" $tmpdir/Xvxlpos.png $ptsz
+        text2png "$ystr" $tmpdir/Yvxlpos.png $ptsz
+        text2png "$zstr" $tmpdir/Zvxlpos.png $ptsz
 
         pngappend $tmpdir/Xvxlpos.png - 5 $tmpdir/Yvxlpos.png - 5 $tmpdir/Zvxlpos.png $tmpdir/slcinfo.png
 
+
+        pngappend $tmpdir/selY.png   -  2 $tmpdir/selZ.png    $tmpdir/SLCsel.png
+        pngappend $tmpdir/selY.png   - 20 $tmpdir/slcinfo.png $tmpdir/SLCsel2.png
+        pngappend $tmpdir/SLCsel.png +  2 $tmpdir/SLCsel2.png $tmpdir/SLCsel.png
+
         if [ $ovly_stat -eq 1 ]
         then
-            pngappend $tmpdir/slcinfo.png - 5 $tmpdir/zinfo.png $tmpdir/slcinfo.png
+            pngappend $tmpdir/SLCsel.png - 6 $tmpdir/zinfo.png $tmpdir/SLCsel.png
         fi
 
-        pngappend $tmpdir/selZ.png + 5 $tmpdir/selY.png   +  5 $tmpdir/selX.png      $tmpdir/SLCsel.png
-        pngappend $tmpdir/SLCsel.png   -  5 $tmpdir/slcinfo.png   $tmpdir/SLCsel.png
         pngappend $tmpdir/Yset.png - 0 $tmpdir/Zset.png   $tmpdir/tmp_out1.png
-        pngappend $tmpdir/Xset.png - 0 $tmpdir/SLCsel.png $tmpdir/tmp_out2.png
+        pngappend $tmpdir/Xset.png - 5 $tmpdir/SLCsel.png $tmpdir/tmp_out2.png
         pngappend $tmpdir/tmp_out1.png + 0 $tmpdir/tmp_out2.png $outnm
     else
         cnt=0
