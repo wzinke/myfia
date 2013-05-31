@@ -544,7 +544,8 @@ then
         then
             smint=`fslstats $statmap -a   -r`
         else
-            smint=`fslstats $statmap -l 0 -r`
+            fslmaths $statmap -thr 0 -bin $tmpdir/uthrmask -odt char
+            smint=`fslstats $statmap -k $tmpdir/uthrmask -r`
         fi
 
         if [ $no_min -eq 1 ]
