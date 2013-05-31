@@ -544,13 +544,15 @@ then
         then
             smint=`fslstats $statmap -a   -r`
         else
-            fslmaths $statmap -thr 0 -bin $tmpdir/uthrmask -odt char
-            smint=`fslstats $statmap -k $tmpdir/uthrmask -r`
-        fi
-
-        if [ $no_min -eq 1 ]
-        then
-            smint="$smint_min $(echo $smint | cut -d' ' -f2)"
+            if [ $no_min -eq 1 ]
+            then
+                fslmaths $statmap -thr $smint_min -bin $tmpdir/uthrmask -odt char
+                smint=`fslstats $statmap -k $tmpdir/uthrmask -r`
+                smint="$smint_min $(echo $smint | cut -d' ' -f2)"
+            else
+                fslmaths $statmap -thr $smint_min -bin $tmpdir/uthrmask -odt char
+                smint=`fslstats $statmap -k $tmpdir/uthrmask -r`
+            fi
         fi
     fi
 
