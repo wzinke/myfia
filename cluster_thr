@@ -54,6 +54,7 @@ fl_dir=`pwd`
 odir=clust_thr
 prefix=''
 suffix=''
+matCLstr=""
 matstr=""
 fullout=0
 outstr=""
@@ -90,7 +91,9 @@ do
          -pf)   prefix=$2
                 shift 2
                 ;;
-        -mat)   matstr="-x $2 --stdvol=$FSLDIR/data/standard/MNI152_T1_1mm_brain"
+        -mat)   matCLstr="-x $2 --stdvol=$FSLDIR/data/standard/MNI152_T1_1mm_brain"
+                matstr="-mat $2"
+                bckfl="$FSLDIR/data/standard/MNI152_T1_2mm_brain"
                 shift 2
                 ;;
        -mask)   maskfl=`remove_ext $2`
@@ -169,7 +172,7 @@ do
         outstr=" --opvals=${onm}_pvals --olmax=${onm}_lmax.txt"
     fi
 
-    cluster -i $tmpdir/thresh_zmap -t $zthr -p $pthr -d $DLH --volume=$VOLUME --othresh=$onm --connectivity=$c --olmaxim=${onm}_lmax -o ${onm}_cluster_mask --mm $matstr $outstr > ${onm}_cluster.txt
+    cluster -i $tmpdir/thresh_zmap -t $zthr -p $pthr -d $DLH --volume=$VOLUME --othresh=$onm --connectivity=$c --olmaxim=${onm}_lmax -o ${onm}_cluster_mask --mm $matCLstr $outstr > ${onm}_cluster.txt
 
     num_active=`fslstats ${onm}_cluster_mask -V | awk '{print $1}'`
 
@@ -190,7 +193,7 @@ do
 
         if [ $do_plot -eq 1 ]
         then
-            vol_slicer ${bckfl} -stat $onm -statrng $zthr $robmaxval -thick -noside  -out ${onm}.png
+            vol_slicer ${bckfl} -stat $onm -statrng $zthr $robmaxval $matstr -thick -noside  -out ${onm}.png
         fi
     else
         minval=0.0

@@ -23,6 +23,7 @@ cat << EOF
             -sf     suffix
             -out    output stem
             -mask   mask images
+            -mat    specify transformation matrix to get voume to standard space
             -bck    specify background image for slice plotting
             -keep   do not delete temporary files
 
@@ -46,6 +47,7 @@ fllst=""
 get_fl=1
 fl_dir=`pwd`
 odir=fdr_thr
+matstr=""
 prefix=''
 suffix=''
 constr=''
@@ -74,6 +76,10 @@ do
                 ;;
         -con)   constr="--conservative"
                 shift
+                ;;
+        -mat)   matstr="-mat $2"
+                bckfl="$FSLDIR/data/standard/MNI152_T1_2mm_brain"
+                shift 2
                 ;;
        -mask)   maskfl=`remove_ext $2`
                 get_mask=0
@@ -117,7 +123,7 @@ zthr=`ptoz $pthr`
 
 if [ $get_mask -eq 0 ]
 then
-    fslmaths $maskfl -abs -bin $tmpdir/mask.nii.gz
+    fslmaths $maskfl -abs -bin $tmpdir/mask -odt char
 fi
 
 for cfl in $fllst
@@ -128,13 +134,13 @@ do
 
     if [ $get_mask -eq 1 ]
     then
-        fslmaths $cfl -abs -bin $tmpdir/mask.nii.gz
+        fslmaths $cfl -abs -bin $tmpdir/mask
     fi
-    num_vxl=`fslstats $tmpdir/mask.nii.gz -V | awk '{print $1}'`
+    num_vxl=`fslstats $tmpdir/mask -V | awk '{print $1}'`
 
     fslmaths $cfl -ztop $tmpdir/thresh_pmap
 
-    probthresh=`fdr -i $tmpdir/thresh_pmap -m $tmpdir/mask.nii.gz -q $pthr $constr | grep "\."`
+    probthresh=`fdr -i $tmpdir/thresh_pmap -m $tmpdir/mask -q $pthr $constr | grep "\."`
 
     if [ "X$probthresh" == "X" ]
     then
@@ -144,7 +150,7 @@ do
         num_active=0
     else
         zcorr=`ptoz $probthresh`
-        fslmaths $cfl -mas $tmpdir/mask.nii.gz -thr $zcorr $onm
+        fslmaths $cfl -mas $tmpdir/mask -thr $zcorr $onm
         num_active=`fslstats $onm -V | awk '{print $1}'`
     fi
 
@@ -160,7 +166,7 @@ do
 
         if [ $do_plot -eq 1 ]
         then
-            vol_slicer ${bckfl} -stat $onm -statrng $zthr $robmaxval -thick -noside  -out ${onm}.png
+            vol_slicer ${bckfl} -stat $onm -statrng $zthr $robmaxval $matstr -thick -noside  -out ${onm}.png
         fi
 
     else

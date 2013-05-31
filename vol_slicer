@@ -34,7 +34,6 @@ cat << EOF
             -out  <outname>     filename for output data
             -keep               do not delete temporary files (for debugging)
 
-
             ###########################################################
             ##   (c) wolf zinke (2008) - part of the MaFIA toolbox   ##
             ##         > MAcaque Functional Image Analysis <         ##

@@ -23,6 +23,7 @@ cat << EOF
             -sym    apply thresholds for positive and negative values
             -out    output stem
             -mask   mask images
+            -mat    specify transformation matrix to get voume to standard space
             -bck    specify background image for slice plotting
             -keep   do not delete temporary files
 
@@ -48,6 +49,7 @@ fllst=""
 get_fl=1
 fl_dir=`pwd`
 odir=bonf_thr
+matstr=""
 prefix=''
 suffix=''
 
@@ -76,6 +78,10 @@ do
         -sym)   twosided=1
                 symm_str="-2"
                 shift
+                ;;
+        -mat)   matstr="-mat $2"
+                bckfl="$FSLDIR/data/standard/MNI152_T1_2mm_brain"
+                shift 2
                 ;;
        -mask)   maskfl=`remove_ext $2`
                 get_mask=0
@@ -120,8 +126,8 @@ zthr=`ptoz $pthr`
 
 if [ $get_mask -eq 0 ]
 then
-    fslmaths $maskfl -abs -bin $tmpdir/mask.nii.gz
-    num_vxl=`fslstats $tmpdir/mask.nii.gz -V | awk '{print $1}'`
+    fslmaths $maskfl -abs -bin $tmpdir/mask -odt char
+    num_vxl=`fslstats $tmpdir/mask -V | awk '{print $1}'`
     pcorr=`echo " $pthr / $num_vxl" | bc -l`
     zcorr=`ptoz $pcorr $symm_str`
 fi
@@ -134,17 +140,17 @@ do
 
     if [ $get_mask -eq 1 ]
     then
-        fslmaths $cfl -abs -bin $tmpdir/mask.nii.gz
-        num_vxl=`fslstats $tmpdir/mask.nii.gz -V | awk '{print $1}'`
+        fslmaths $cfl -abs -bin $tmpdir/mask
+        num_vxl=`fslstats $tmpdir/mask -V | awk '{print $1}'`
         pcorr=`echo " $pthr / $num_vxl" | bc -l`
         zcorr=`ptoz $pcorr $symm_str`
     fi
 
     if [ $twosided -eq 1 ]
     then
-        fslmaths $cfl -mas $tmpdir/mask.nii.gz -abs -thr $zcorr -bin $tmpdir/cthr_mask
+        fslmaths $cfl -mas $tmpdir/mask -abs -thr $zcorr -bin $tmpdir/cthr_mask
     else
-        fslmaths $cfl -mas $tmpdir/mask.nii.gz      -thr $zcorr -bin $tmpdir/cthr_mask
+        fslmaths $cfl -mas $tmpdir/mask      -thr $zcorr -bin $tmpdir/cthr_mask
     fi
 
     num_active=`fslstats $tmpdir/cthr_mask -V | awk '{print $1}'`
@@ -162,12 +168,7 @@ do
 
         if [ $do_plot -eq 1 ]
         then
-            if which latex2html >/dev/null; then
-                vol_slicer ${bckfl} -stat $onm -statrng $robminval $robmaxval -thick -noside  -out ${onm}.png
-            else
-                overlay 1 0 ${bckfl}.nii.gz -a $onm $robminval $robmaxval $tmpdir/rendered
-                slice_set $tmpdir/rendered -u -s 2 -out ${onm}.png
-            fi
+            vol_slicer ${bckfl} -stat $onm -statrng $zthr $robmaxval $matstr -thick -noside  -out ${onm}.png
         fi
     else
         fslmaths $cfl -mul 0 $onm
