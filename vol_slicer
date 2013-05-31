@@ -599,9 +599,13 @@ then
     fi
     echo  "statmap:   $statmap" >> $slcfl
     echo  "statrange: $smint  " >> $slcfl
+elif [ $doCX -eq 1 ]
+then
+    overlay $trans 0 $bg_img $bgint $statstr $tmpdir/slcsel 1 4 $tmpdir/curr_img
 else
     imcp $bg_img $tmpdir/curr_img
 fi
+
 #----------------------------------------------------------------------#
 # X
 if [ $numX -gt 0 ]
@@ -863,7 +867,7 @@ then
 
 
         pngappend $tmpdir/selY.png   -  2 $tmpdir/selZ.png    $tmpdir/SLCsel.png
-        pngappend $tmpdir/selY.png   - 20 $tmpdir/slcinfo.png $tmpdir/SLCsel2.png
+        pngappend $tmpdir/selX.png   - 20 $tmpdir/slcinfo.png $tmpdir/SLCsel2.png
         pngappend $tmpdir/SLCsel.png +  2 $tmpdir/SLCsel2.png $tmpdir/SLCsel.png
 
         if [ $ovly_stat -eq 1 ]
