@@ -139,16 +139,23 @@ then
 else
     fslmerge -t $tmpdir/testset $smplA $smplB $smplC
 fi
- 
+
 nA=`fslnvols $smplA`
 numPTS=$nA
 
+
+##################################
+# identify constant voxel and mask them out
+fslmaths $tmpdir/testset -abs -Tmax $tmpdir/testset_allmax 
+fslmaths $tmpdir/testset -abs -Tmin $tmpdir/testset_allmin 
+fslmaths $tmpdir/testset_allmax -sub $tmpdir/testset_allmin -Tmax -bin $tmpdir/testset_mask --odt char
+
 if [ $get_mask -eq 1 ]
 then
-    fslmaths $tmpdir/testset -abs -Tmax $tmpdir/testset_allmax 
-    fslmaths $tmpdir/testset -abs -Tmin $tmpdir/testset_allmin 
-    fslmaths $tmpdir/testset_allmax -sub -Tmax $tmpdir/testset_allmin -bin $tmpdir/testset_mask --odt char
     maskfl=$tmpdir/testset_mask
+else
+    fslmaths $maskfl -mas $tmpdir/testset_mask -bin $tmpdir/testset_cmask -odt char
+    maskfl=$tmpdir/testset_cmask
 fi
 
 # if [ $tflame -eq 1 ]  # bloody inconsistencies of argument specification in fsl tools
@@ -188,18 +195,7 @@ fi
 ##################################
 ### create design files
 
-# design.grp  (this should be the same for all three kinds of tests)
-echo "/NumWaves 1"        > $tmpdir/ttest.grp
-echo "NumPoints $numPTS" >> $tmpdir/ttest.grp
-echo ""                  >> $tmpdir/ttest.grp
-echo "/Matrix"           >> $tmpdir/ttest.grp
-cnt=0
-while [ $cnt -lt $numPTS ]
-do
-    cnt=$(($cnt+1))
-    echo "1"             >> $tmpdir/ttest.grp
-done
-
+##################################
 if [ $do1smpl -eq 1 ]   # one sample t test
 then
     # design.mat
@@ -225,6 +221,19 @@ then
     echo "/Matrix"                       >> $tmpdir/ttest.con
     echo "1"                             >> $tmpdir/ttest.con
 
+    # design.grp  
+    echo "/NumWaves 1"        > $tmpdir/ttest.grp
+    echo "NumPoints $numPTS" >> $tmpdir/ttest.grp
+    echo ""                  >> $tmpdir/ttest.grp
+    echo "/Matrix"           >> $tmpdir/ttest.grp
+    cnt=0
+    while [ $cnt -lt $numPTS ]
+    do
+        cnt=$(($cnt+1))
+        echo "1"             >> $tmpdir/ttest.grp
+    done
+
+##################################
 elif [ $do_paired -eq 0 ] # unpaired two sample t test
 then
     # code modified from FSL's design_ttest2 script
@@ -259,6 +268,19 @@ then
     done
     echo ""               >> $tmpdir/ttest.mat
 
+    # design.grp  
+    echo "/NumWaves 1"        > $tmpdir/ttest.grp
+    echo "NumPoints $numPTS" >> $tmpdir/ttest.grp
+    echo ""                  >> $tmpdir/ttest.grp
+    echo "/Matrix"           >> $tmpdir/ttest.grp
+    cnt=0
+    while [ $cnt -lt $numPTS ]
+    do
+        cnt=$(($cnt+1))
+        echo "1"             >> $tmpdir/ttest.grp
+    done
+
+##################################
 elif [ $do1smpl -eq 2 ]    # paired two sample t test
 then
 # design.con
@@ -338,6 +360,17 @@ then
     done
     echo ""                  >> $tmpdir/ttest.mat
 
+    # design.grp  
+    echo "/NumWaves 1"        > $tmpdir/ttest.grp
+    echo "NumPoints $numPTS" >> $tmpdir/ttest.grp
+    echo ""                  >> $tmpdir/ttest.grp
+    echo "/Matrix"           >> $tmpdir/ttest.grp
+
+    seq $nA                  >> $tmpdir/ttest.grp
+    seq $nB                  >> $tmpdir/ttest.grp
+
+
+##################################
 else  # tripled t test
 # design.con
     echo '/ContrastName1   "A-B"'    > $tmpdir/ttest.con
@@ -345,10 +378,10 @@ else  # tripled t test
     echo '/ContrastName2   "B-C"'    > $tmpdir/ttest.con
     echo "/NumWaves $(($nA+2))"     >> $tmpdir/ttest.con
     echo "/NumContrasts 3"          >> $tmpdir/ttest.con
-    echo "/PPheights 1 1 1"           >> $tmpdir/ttest.con
+    echo "/PPheights 1 1 1"         >> $tmpdir/ttest.con
     echo ""                         >> $tmpdir/ttest.con
     echo "/Matrix"                  >> $tmpdir/ttest.con
-    echo -n "2 1"                     >> $tmpdir/ttest.con
+    echo -n "2 1"                   >> $tmpdir/ttest.con
     cnt=0
     while [ $cnt -lt $nA ]
     do
@@ -356,7 +389,7 @@ else  # tripled t test
         echo -n " 0"      >> $tmpdir/ttest.con
     done
     echo ""               >> $tmpdir/ttest.con
-    echo -n "1 2"          >> $tmpdir/ttest.con
+    echo -n "1 2"         >> $tmpdir/ttest.con
     cnt=0
     while [ $cnt -lt $nB ]
     do
@@ -364,7 +397,7 @@ else  # tripled t test
         echo -n " 0"      >> $tmpdir/ttest.con
     done
     echo ""               >> $tmpdir/ttest.con
-    echo -n "-1 1"          >> $tmpdir/ttest.con
+    echo -n "-1 1"        >> $tmpdir/ttest.con
     cnt=0
     while [ $cnt -lt $nC ]
     do
@@ -376,7 +409,7 @@ else  # tripled t test
 # design.mat
     echo "/NumWaves $(($nA+2))"  > $tmpdir/ttest.mat
     echo "/NumPoints $numPTS"   >> $tmpdir/ttest.mat
-    echo -n "/PPheights 2 2"      >> $tmpdir/ttest.mat
+    echo -n "/PPheights 2 2"    >> $tmpdir/ttest.mat
     cnt=0
     while [ $cnt -lt $nA ]
     do
@@ -444,9 +477,19 @@ else  # tripled t test
     done
     echo ""                  >> $tmpdir/ttest.mat
 
-fi
-#__________________________________________________________________________________________#
+    # design.grp  
+    echo "/NumWaves 1"        > $tmpdir/ttest.grp
+    echo "NumPoints $numPTS" >> $tmpdir/ttest.grp
+    echo ""                  >> $tmpdir/ttest.grp
+    echo "/Matrix"           >> $tmpdir/ttest.grp
 
+    seq $nA                  >> $tmpdir/ttest.grp
+    seq $nB                  >> $tmpdir/ttest.grp
+    seq $nC                  >> $tmpdir/ttest.grp
+
+fi
+
+#__________________________________________________________________________________________#
 if [ $tflame -eq 1 ]  # use fsl_glm for a parametric test
 then
 
@@ -457,13 +500,13 @@ then
 
 #  flameo --cope=$tmpdir/testset --mask=$maskfl --dm=$tmpdir/ttest.mat --tc=$tmpdir/ttest.con --cs=$tmpdir/ttest.grp --runmode=fe
 
-    fsl_glm -i $tmpdir/testset -d $tmpdir/ttest.mat -c $tmpdir/ttest.con -o $outfl --out_z=${outfl}_zstat --out_t=${outfl}_tstat -m $maskfl
+    fsl_glm -i $tmpdir/testset -d $tmpdir/ttest.mat -c $tmpdir/ttest.con -o $outfl --out_z=${outfl}_zstat --out_t=${outfl}_tstat --out_p=${outfl}_pvals -m $maskfl
 
+##################################
 else # use randomize for a non-parametric test
-
     if [ $do1smpl -gt 1 ]
     then
-        designstr=" -d $tmpdir/ttest.mat -t $tmpdir/ttest.con"
+        designstr=" -d $tmpdir/ttest.mat -t $tmpdir/ttest.con -e $tmpdir/ttest.grp"
     else
         if [ $numPTS -lt 20 ]
         then
@@ -477,21 +520,19 @@ else # use randomize for a non-parametric test
     then
         permstr="-R"
     else
-        permstr="-T"
+        permstr="-T -N "
     fi
 
     if [ $run_grid -eq 1  ]
     then
         FSLPARALLEL=condor
         randomise_parallel -i $tmpdir/testset -o $outfl  $designstr -m $maskfl $permstr -n $num_perm -C 2.3 -x
-
     else
         randomise -i $tmpdir/testset -o $outfl  $designstr -m $maskfl  $permstr -n $num_perm -C 2.3 -x
     fi
-
 fi
 
-#----------------------------------------------------------------------#
+#__________________________________________________________________________________________#
 if [ $keep_tmp -eq 0 ]
 then
     rm -r $tmpdir
