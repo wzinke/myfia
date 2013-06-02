@@ -60,6 +60,7 @@ get_grpmn=0
 num_perm=1
 run_grid=0
 smstr=""
+qFDR=0.05
 
 tmpdir=`tmpnam tmp_ttest`
 rm $tmpdir
@@ -148,7 +149,7 @@ numPTS=$nA
 # identify constant voxel and mask them out
 fslmaths $tmpdir/testset -abs -Tmax $tmpdir/testset_allmax 
 fslmaths $tmpdir/testset -abs -Tmin $tmpdir/testset_allmin 
-fslmaths $tmpdir/testset_allmax -sub $tmpdir/testset_allmin -Tmax -bin $tmpdir/testset_mask --odt char
+fslmaths $tmpdir/testset_allmax -sub $tmpdir/testset_allmin -Tmax -bin $tmpdir/testset_mask -odt char
 
 if [ $get_mask -eq 1 ]
 then
@@ -157,13 +158,6 @@ else
     fslmaths $maskfl -mas $tmpdir/testset_mask -bin $tmpdir/testset_cmask -odt char
     maskfl=$tmpdir/testset_cmask
 fi
-
-# if [ $tflame -eq 1 ]  # bloody inconsistencies of argument specification in fsl tools
-# then
-#     maskstr="--mask=$maskfl"
-# else
-#     maskstr="-m $maskfl"
-# fi
 
 fslmaths $tmpdir/testset -mas $maskfl $smstr $tmpdir/testset
 
@@ -529,6 +523,15 @@ else # use randomize for a non-parametric test
         randomise_parallel -i $tmpdir/testset -o $outfl  $designstr -m $maskfl $permstr -n $num_perm -C 2.3 -x
     else
         randomise -i $tmpdir/testset -o $outfl  $designstr -m $maskfl  $permstr -n $num_perm -C 2.3 -x
+    fi
+
+    if [ $(cat $FSLDIR/etc/fslversion |  sed -e 's/\.//g') -lt 504 ]
+    then
+        fdr -i ${outfl}_vox_p_tstat1  --oneminusp -m $maskfl -q $qFDR --othresh=${outfl}_vox_p_fdr
+        fdr -i ${outfl}_tfce_p_tstat1 --oneminusp -m $maskfl -q $qFDR --othresh=${outfl}_tfce_p_fdr
+    else
+        fdr -i ${outfl}_vox_p_tstat1  --oneminusp -m $maskfl -q $qFDR -a ${outfl}_vox_p_fdr
+        fdr -i ${outfl}_tfce_p_tstat1 --oneminusp -m $maskfl -q $qFDR -a ${outfl}_tfce_p_fdr
     fi
 fi
 
