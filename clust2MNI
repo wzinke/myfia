@@ -15,12 +15,12 @@ cat << EOF
 
     OPTIONS:
             -o      name of the MNI table (otherwise use terminal for output)
-            -lmax   use local maxima for refined information
+            -lmax   use local maxima for refined information (NIY!)
             -mat    apply this transformation on the coordinates
             -ref    reference image (if not provided standard MNI space is assumed)
             -ori    image in original image space (if input is no a nifti file)
             -thr    use this threshold (default: minimum>0)
-            -id     identify underlying brain structure at CoG
+            -p      use cluster inference at this p-level
             -idmax  identify underlying brain structure for maximum voxel
             -atlas  this atlas for identification (default: Harvard-Oxford)
             -keep   do not delete temporary files
@@ -37,6 +37,7 @@ exit 1
 
 }
  
+# TODO: Implement negative contrast
 # BUG: coordinate transformation with img2stdcoord give wrong results
 # TODO: implement use of local maxima
 # TODO: implement non-linear transformations
@@ -51,12 +52,19 @@ fi
  
 #__________________________________________________________________________________________#
 
-onm="$(remove_ext $flnm)_clustID.dat"
-thr=$(fslstats $flnm -l 0 -R)
+if [ $(imtest $flnm) -eq 1 ]
+then
+    oriimg=$flnm
+    onm="$(remove_ext $flnm)_clustID.dat"
+    thr=$(fslstats $flnm -l 0 -R)
+else
+    oriimg=""
+    onm="$(echo $flnm \ cut -d\. -f1)_clustID.dat"
+fi
+
 keep_temp=0
 get_lmax=0
 refvol="$FSLDIR/data/standard/MNI152_T1_1mm_brain"
-oriimg=$flnm
 atlas="Harvard-Oxford Cortical Structural Atlas"
 do_id=0
 do_max=0

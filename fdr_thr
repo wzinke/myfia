@@ -19,6 +19,7 @@ cat << EOF
             -o      output directory
             -p      p-threshold for significance (default 0.0001)
             -con    user conservarive fdr
+            -neg    apply two sided cluster thresholding
             -pf     prefix
             -sf     suffix
             -out    output stem
@@ -38,6 +39,12 @@ exit 1
 
 }
 
+if [ $# -lt 1 ]; 
+then
+    Usage
+fi
+
+# TODO: implement -neg option correctly!
 #__________________________________________________________________________________________#
 keep_temp=0
 get_mask=1
@@ -51,6 +58,8 @@ matstr=""
 prefix=''
 suffix=''
 constr=''
+do_neg=0
+neg=""
 
 while [ $# -gt 0 ] ;
 do
@@ -67,6 +76,10 @@ do
                 ;;
           -p)   pthr=$2
                 shift 2
+                ;;
+        -neg)   do_neg=1
+                neg="-neg"
+                shift 
                 ;;
          -sf)   suffix=$2
                 shift 2
@@ -140,9 +153,31 @@ do
 
     fslmaths $cfl -ztop $tmpdir/thresh_pmap
 
-    probthresh=`fdr -i $tmpdir/thresh_pmap -m $tmpdir/mask -q $pthr $constr | grep "\."`
+    if [ ! $(cat $FSLDIR/etc/fslversion |  sed -e 's/\.//g') -lt 504 ]
+    then
+       adj_str="-a ${onm}_Padj"
+    else
+       adj_str=""
+    fi
 
-    if [ "X$probthresh" == "X" ]
+    probthresh=`fdr -i $tmpdir/thresh_pmap -m $tmpdir/mask -q $pthr $constr $adj_str --othresh=$tmpdir/thresh_P | grep "\."`
+
+    if [ $do_neg -eq 1 ]
+    then
+        if [ ! $(cat $FSLDIR/etc/fslversion |  sed -e 's/\.//g') -lt 504 ]
+        then
+            adj_str="-a ${onm}_Padj"
+        fi
+
+        fslmaths $tmpdir/thresh_zmap -mul -1 $tmpdir/inv_zmap
+        probthresh=`fdr -i $tmpdir/inv_zmap -m $tmpdir/mask -q $pthr $constr $adj_str --othresh=$tmpdir/thresh_nP | grep "\."`
+
+        fslmaths $tmpdir/thresh_P -add $tmpdir/thresh_nP $tmpdir/thresh_P
+    fi
+    fslmaths $tmpdir/thresh_P -bin $tmpdir/thresh_P -odt char
+    num_active=`fslstats $tmpdir/thresh_P -V | awk '{print $1}'`
+
+    if [ $num_active -eq 0 ]
     then
         probthresh=0
         zcorr=NA
@@ -150,10 +185,10 @@ do
         num_active=0
     else
         zcorr=`ptoz $probthresh`
-        fslmaths $cfl -mas $tmpdir/mask -thr $zcorr $onm
-        num_active=`fslstats $onm -V | awk '{print $1}'`
+        fslmaths $cfl -mas $tmpdir/thresh_P  $onm
     fi
 
+# TODO: correct here for use of -neg option!
     if [ $num_active -gt 0 ]
     then
         minmax=`fslstats $cfl -k $onm -R`
@@ -166,7 +201,7 @@ do
 
         if [ $do_plot -eq 1 ]
         then
-            vol_slicer ${bckfl} -stat $onm -statrng $zthr $robmaxval $matstr -thick -noside  -out ${onm}.png
+            vol_slicer ${bckfl} -stat $onm -statrng $zthr $robmaxval $matstr $neg -thick -noside  -out ${onm}.png
         fi
 
     else

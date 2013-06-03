@@ -21,6 +21,7 @@ cat << EOF
             -z      threshold of z maps (default `ptoz 0.01`)
             -p      cluster p-threshold for significance (default 0.01)
             -conn   connectivity of voxels (default 26)
+            -neg    apply two sided cluster thresholding
             -pf     prefix
             -sf     suffix
             -out    output stem
@@ -40,6 +41,10 @@ exit 1
 
 }
 
+if [ $# -lt 1 ]; 
+then
+    Usage
+fi
 
 #__________________________________________________________________________________________#
 keep_temp=0
@@ -58,7 +63,8 @@ matCLstr=""
 matstr=""
 fullout=0
 outstr=""
-
+do_neg=0
+neg=""
 
 while [ $# -gt 0 ] ;
 do
@@ -84,6 +90,10 @@ do
                 ;;
        -conn)   c=$2
                 shift 2
+                ;;
+        -neg)   do_neg=1
+                neg="-neg"
+                shift 
                 ;;
          -sf)   suffix=$2
                 shift 2
@@ -151,6 +161,7 @@ do
     then
         fslmaths $cfl -abs -bin $tmpdir/mask.nii.gz
     fi
+
     num_vxl=`fslstats $tmpdir/mask.nii.gz -V | awk '{print $1}'`
 
     fslmaths $cfl -mas $tmpdir/mask.nii.gz $tmpdir/thresh_zmap
@@ -169,17 +180,31 @@ do
 
     if [ $fullout -eq 1 ]
     then
-        outstr=" --opvals=${onm}_pvals --olmax=${onm}_lmax.txt"
+        outstr=" --opvals=${onm}_pvals --olmax=${onm}_lmax.txt -o ${onm}_cluster_mask"
     fi
 
-    cluster -i $tmpdir/thresh_zmap -t $zthr -p $pthr -d $DLH --volume=$VOLUME --othresh=$onm --connectivity=$c --olmaxim=${onm}_lmax -o ${onm}_cluster_mask --mm $matCLstr $outstr > ${onm}_cluster.txt
+    cluster -i $tmpdir/thresh_zmap -t $zthr -p $pthr -d $DLH --volume=$VOLUME --othresh=$onm --connectivity=$c --olmaxim=${onm}_lmax --mm $matCLstr $outstr > ${onm}_cluster.txt
 
-    num_active=`fslstats ${onm}_cluster_mask -V | awk '{print $1}'`
-
-    if [ $fullout -eq 0 ]
+    if [ $do_neg -eq 1 ]
     then
-        imrm ${onm}_cluster_mask
+        if [ $fullout -eq 1 ]
+        then
+            outstr=" --opvals=${onm}_neg_pvals -o $tmpdir/thresh_neg_cluster_mask --olmax=${onm}_neg_lmax.txt"
+        fi
+
+        fslmaths $tmpdir/thresh_zmap -mul -1 $tmpdir/inv_zmap
+
+        cluster -i $tmpdir/inv_zmap -t $zthr -p $pthr -d $DLH --volume=$VOLUME --othresh=$tmpdir/thresh_neg --connectivity=$c --olmaxim=${onm}_neg_lmax --mm $matCLstr $outstr > ${onm}_neg_cluster.txt
+
+        fslmaths $tmpdir/thresh_neg -mul -1 -add $onm $onm
+
+        if [ $fullout -eq 1 ]
+        then    
+            fslmaths $tmpdir/thresh_neg_cluster_mask -mul -1 -add ${onm}_cluster_mask ${onm}_cluster_mask
+        fi
     fi
+
+    num_active=`fslstats $onm -a -V | awk '{print $1}'`
 
     if [ $num_active -gt 0 ]
     then
@@ -187,13 +212,13 @@ do
         minval=`echo $minmax | awk '{print $1}'`
         maxval=`echo $minmax | awk '{print $2}'`
 
-        robminmax=`fslstats $cfl -k $onm -r`
+        robminmax=`fslstats $cfl -k $onm -a -r`
         robminval=`echo $robminmax | awk '{print $1}'`
         robmaxval=`echo $robminmax | awk '{print $2}'`
 
         if [ $do_plot -eq 1 ]
         then
-            vol_slicer ${bckfl} -stat $onm -statrng $zthr $robmaxval $matstr -thick -noside  -out ${onm}.png
+            vol_slicer ${bckfl} -stat $onm -statrng $zthr $robmaxval $matstr $neg -thick -noside  -out ${onm}.png
         fi
     else
         minval=0.0
@@ -201,6 +226,8 @@ do
 
         robminval=0.0
         robmaxval=0.0
+        rm -f ${onm}_cluster.txt
+        rm -f ${onm}_neg_cluster.txt
 
         if [ -e ${onm}.png ]
         then

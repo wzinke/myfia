@@ -68,7 +68,6 @@ text2png(){
 
 #----------------------------------------------------------------------#
 outnm="${bg_img}_sliceselection.png"
-bgint=`fslstats $bg_img -r`
 # smint="3 10"
 
 minpxl=5
@@ -87,6 +86,7 @@ zstr=""
 slcwdth=1
 statmap=""
 getsmint=1
+getbckint=1
 no_min=0
 doMM=1
 doCX=0
@@ -156,6 +156,7 @@ do
                 shift
                 ;;
        -bgint)  bgint="$2 $3"
+                getbckint=0
                 shift 3
                 ;;
      -statrng)  smint="$2 $3"
@@ -198,6 +199,13 @@ done
 #----------------------------------------------------------------------#
 mkdir $tmpdir;
 
+#----------------------------------------------------------------------#
+# get robust intensity range of background image
+if [ $getbckint -eq 1 ]
+then
+    fslmaths $bg_img -abs -bin $tmpdir/bcknonzero -odt char
+    bgint=$(fslstats $bg_img -k $tmpdir/bcknonzero -r )
+fi
 #----------------------------------------------------------------------#
 # coregister overlay statistics to background image
 if [ $ovly_stat -eq 1 ]
@@ -839,11 +847,10 @@ then
     text2png "${zthr[0]}" $tmpdir/lowZ.gif $ptsz
     text2png "${zthr[1]}" $tmpdir/high.gif $ptsz
 
-
     if [ $do_neg -eq 1 ]
     then
         text2png "-${zthr[0]}" $tmpdir/nlowZ.gif $ptsz
-        text2png "-${zthr[0]}" $tmpdir/nhigh.gif $ptsz
+        text2png "-${zthr[1]}" $tmpdir/nhigh.gif $ptsz
         pngappend $tmpdir/nhigh.gif + 5 $FSLDIR/etc/luts/ramp2.gif + 10 $tmpdir/nlowZ.gif + 25 $tmpdir/lowZ.gif + 5 $FSLDIR/etc/luts/ramp.gif + 5 $tmpdir/high.gif $tmpdir/zinfo.gif
     else
         pngappend $tmpdir/lowZ.gif + 5 $FSLDIR/etc/luts/ramp.gif + 5 $tmpdir/high.gif $tmpdir/zinfo.gif
@@ -866,7 +873,6 @@ then
         text2png "$zstr" $tmpdir/Zvxlpos.png $ptsz
 
         pngappend $tmpdir/Xvxlpos.png - 5 $tmpdir/Yvxlpos.png - 5 $tmpdir/Zvxlpos.png $tmpdir/slcinfo.png
-
 
         pngappend $tmpdir/selY.png   -  2 $tmpdir/selZ.png    $tmpdir/SLCsel.png
         pngappend $tmpdir/selX.png   - 20 $tmpdir/slcinfo.png $tmpdir/SLCsel2.png
