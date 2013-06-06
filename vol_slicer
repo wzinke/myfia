@@ -16,7 +16,7 @@ cat << EOF
                                 three dimensions (default: "0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9").
                                 this option is only effective when -x/y/z are not specified.
             -stat <flnm>        statistical map
-            -mat  <flnm>        provide a transformation matrix to get the overlay image into 
+            -mat  <flnm>        provide a transformation matrix to get the overlay image into
                                 the space of the background image
             -rsmpl              resample overlay image to match resolution of background image.
                                 this assumes that both images are in the same space.
@@ -45,8 +45,9 @@ EOF
 }
 
 # TODO: Get Rid Of xstr/ystr/zstr ...
+# TODO: Crop images slice wise
 # TODO: Add optional table describing peak locations and max stat values of patches (positie and negative)
-
+# TODO: When displaying several dimensions using the set option get all slices to the same width (proper collumn view) by adjusting the pixel gap accordingly
 #----------------------------------------------------------------------#
 if [ $# -lt 1 ]; then
     Usage
@@ -91,7 +92,7 @@ no_min=0
 doMM=1
 doCX=0
 SglVXL=1
-def_set="0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9" 
+def_set="0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9"
 get_coord=0
 usedefset=1
 ovly_stat=0
@@ -390,8 +391,8 @@ then
     fi
 fi
 
-slcfl=`echo $outnm | sed -e 's/.png/.slc/g'`
-echo  "bgimg: $bg_img" > $slcfl
+# slcfl=`echo $outnm | sed -e 's/.png/.slc/g'`
+# echo  "bgimg: $bg_img" > $slcfl
 slcsc=`echo "$scl / 2" | bc -l`
 
 if [ $(($doCX+$do_neg)) -eq 2 ]
@@ -607,8 +608,8 @@ then
             overlay $trans 0 $bg_img $bgint $statstr $tmpdir/curr_img
         fi
     fi
-    echo  "statmap:   $statmap" >> $slcfl
-    echo  "statrange: $smint  " >> $slcfl
+#     echo  "statmap:   $statmap" >> $slcfl
+#     echo  "statrange: $smint  " >> $slcfl
 elif [ $doCX -eq 1 ]
 then
     overlay $trans 0 $bg_img $bgint $statstr $tmpdir/slcsel 1 4 $tmpdir/curr_img
@@ -676,7 +677,7 @@ then
     done
 
     echo "$xstr"
-    echo "$xstr" >> $slcfl
+#     echo "$xstr" >> $slcfl
 
     if [ $SglVXL -eq 0 ]
     then
@@ -750,7 +751,7 @@ then
     done
 
     echo "$ystr"
-    echo "$ystr" >> $slcfl
+#     echo "$ystr" >> $slcfl
 
     if [ $SglVXL -eq 0 ]
     then
@@ -823,7 +824,7 @@ then
     done
 
     echo "$zstr"
-    echo "$zstr" >> $slcfl
+#     echo "$zstr" >> $slcfl
 
     if [ $SglVXL -eq 0 ]
     then
