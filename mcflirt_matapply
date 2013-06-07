@@ -1,0 +1,170 @@
+#!/bin/bash
+#
+# mcflirt_matapply
+#
+# created: 23.05.2012
+# by zinke
+#
+
+Usage() {
+cat << EOF
+
+    Usage: $0 <matfl> <matdir> [options]
+
+    OPTIONS:
+            -i      image time series to apply new mat files to
+            -o      output name of modified files
+            -odir   new directory name
+            -ref    reference space (default is input file)
+            -sinc   do final sinc interpolation
+            -spline do final spline interpolation
+            -keep   do not delete temporary directory
+
+
+            ###########################################################
+            ##   (c) wolf zinke (2012) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##     for comments and questions: wolfzinke@gmx.net     ##
+            ###########################################################
+
+
+EOF
+exit 1
+
+}
+
+
+if [ $# -lt 2 ]; then
+    Usage
+else
+    inmat=$1;
+    matdir=$2;
+    shift 2
+fi
+
+#----------------------------------------------------------------------#
+#
+get_oflnm=1
+inflnm=` basename $matdir | cut -d. -f1`
+dirpath=`dirname  $matdir`
+get_reffl=1
+getodirnm=1
+do_spline=0
+do_sinc=0
+keep_tmp=0
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+          -i)   inflnm=$2
+                shift 2
+                ;;
+          -o)   oflnm=`remove_ext $2`
+                get_oflnm=0
+                shift 2
+                ;;
+        -ref)   refflnm=$2
+                get_reffl=0
+                shift 2
+                ;;
+       -odir)   odirnm=$2
+                getodirnm=0
+                shift 2
+                ;;
+       -sinc)   do_sinc=1
+                shift
+                ;;
+     -spline)   do_spline=1
+                shift
+                ;;
+        -keep)  keep_tmp=1
+                shift
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+tmpdir=`tmpnam tmp_MatApply`
+rm $tmpdir
+mkdir $tmpdir
+#----------------------------------------------------------------------#
+# some preparations
+if [ $get_oflnm -eq 1 ]
+then
+    oflnm="${inflnm}_trans"
+fi
+
+if [ $get_reffl -eq 1 ]
+then
+    fslroi $dirpath/${inflnm} $tmpdir/epiref 0 1
+    refflnm=$tmpdir/epiref
+fi
+
+if [ $getodirnm -eq 1 ]
+then
+	onm=`basename ${oflnm}`
+    odirnm=${oflnm}.mat
+fi
+
+#----------------------------------------------------------------------#
+# 
+
+if [ ! -d $odirnm ]
+then
+    mkdir $odirnm
+fi
+
+mat_lst=`ls $matdir/*`
+
+cnt=0
+for cmat in $mat_lst
+do
+    matnm=`basename $cmat`
+    convert_xfm -omat $odirnm/$matnm -concat $inmat $cmat
+    mat_arr[cnt]=$matnm
+    cnt=$(($cnt+1))
+done
+
+#----------------------------------------------------------------------#
+# apply modified transformations
+mkdir $tmpdir/sglvols
+mkdir $tmpdir/transvols
+fslsplit $dirpath/$inflnm $tmpdir/sglvols/vol
+fl_lst=`ls $tmpdir/sglvols/vol*`
+
+if [ $do_spline -eq 1 ]
+then
+    ip="-interp spline"
+elseif [ $do_sinc -eq 1 ]
+    ip="-interp sinc"
+then
+    ip="-interp trilinear"
+fi
+
+cnt=0
+translst=""
+for cfl in $fl_lst
+do
+    volnm=`basename $cfl`
+    flirt -in $cfl -applyxfm -init $odirnm/${mat_arr[$cnt]} -ref $refflnm -out $tmpdir/transvols/$volnm -datatype float $ip
+    cnt=$(($cnt+1))
+    translst="$translst $tmpdir/transvols/$volnm"
+done
+
+fslmerge -t $oflnm $translst
+
+fsl_mcpar  $odirnm -out ${oflnm}.par
+plot_MCpar ${outnm}.par ${oflnm}_mcpar
+
+#----------------------------------------------------------------------#
+# remove temporary directory
+if [ $keep_tmp -eq 0 ]
+then
+    rm -r $tmpdir
+fi
+

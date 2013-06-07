@@ -1,0 +1,776 @@
+#!/bin/bash
+#
+# groupcoreg
+#
+# created: 22.05.2012
+# by zinke
+#
+
+Usage() {
+cat << EOF
+
+    Usage: $0 <subjlist> [options]
+
+        performs motion correction on all runs for each subjects,
+        aligns the data to each other and creates a group reference,
+        which remains in EPI space for further analysis.
+
+    OPTIONS:
+            -ref    reference image for coregistration
+            -dir    root directory
+            -rpfx   run prefix (default: 'run')
+            -nit    number of iterations for the coregistration and motion correction
+            -comb   apply motion correction on combined runs
+			-nosubj do not process individual subject data
+            -noinit skip initial processng (thresholding and masking)
+            -nomc   skip motion correction
+            -loc    run locally, ignore condor_submit
+            -np     number of processors used when running locally
+            -o      output diretory
+            -keep   do not delete temporary directory
+
+            ###########################################################
+            ##   (c) wolf zinke (2012) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##     for comments and questions: wolfzinke@gmx.net     ##
+            ###########################################################
+
+EOF
+exit 1
+
+}
+
+if [ $# -lt 1 ]; then
+    Usage
+else
+    subjlst=$1;
+    shift
+fi
+
+#__________________________________________________________________________________________#
+SECONDS=0
+
+refimg=${FSLDIR}/data/standard/MNI152_T1_2mm_brain
+keep_tmp=0
+rootdir=`pwd`
+odir=group_pp
+do_subj=1
+nit=4
+do_mc=1
+combruns=0
+do_init=1
+nump=1
+run_loc=0
+runpfx='run'
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+         -dir)  rootdir=$2
+                shift 2
+                ;;
+           -o)  odir=$2
+                shift 2
+                ;;
+         -nit)  nit=$2
+                shift 2
+                ;;
+         -ref)  refimg=$2
+                shift 2
+                ;;
+        -rpfx)  runpfx="$2"
+                shift 2
+                ;;
+        -comb)  combruns=1
+                shift
+                ;;
+        -nomc)  do_mc=0
+                shift
+                ;;
+      -noinit)  do_init=0
+                shift
+                ;;
+      -nosubj)  do_subj=0
+                shift
+                ;;
+         -loc)  run_loc=1
+                shift
+                ;;
+          -np)  nump=$2
+                shift 2
+                ;;
+        -keep)  keep_tmp=1
+                shift
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+if [ $run_loc -eq 1 ]
+then
+    loc_flag="-loc -nproc $nump"
+else
+    loc_flag=""
+fi
+
+#__________________________________________________________________________________________#
+tmpdir=`tmpnam tmp_GroupCoreg`
+rm $tmpdir
+mkdir $tmpdir
+
+format_tm(){
+	usedtime=`printf  "%02d:%02d:%02d" $(($1/3600)) $(($1%3600/60)) $(($1%60))`
+	echo "$usedtime"
+}
+
+if [ ! -d $odir ]
+then
+    mkdir $odir
+fi
+
+# ### ########################################################################## ### #
+#####
+submitHDR=$(  condor_subhd /bin/bash            -ini $rootdir)
+mcflirtHDR=$( condor_subhd $FSLDIR/bin/mcflirt  -ini $rootdir)
+flirtHDR=$(   condor_subhd $FSLDIR/bin/flirt    -ini $rootdir)
+mergeHDR=$(   condor_subhd $FSLDIR/bin/fslmerge -ini $rootdir)
+matapplyHDR=$(condor_subhd /home/zinke/myfia/mcflirt_matapply -ini $rootdir)
+checkregHDR=$(condor_subhd /home/zinke/myfia/chkreg           -ini $rootdir)
+
+# ### ########################################################################## ### #
+#####
+if [ $do_subj -eq 1 ]
+then
+    if [ $do_init -eq 1 ]
+    then
+    echo "$mcflirtHDR" > $odir/init_mc.submit
+
+        for csubj in $subjlst
+        do
+            echo "`format_tm $SECONDS`: working on $csubj"
+
+            if [ ! -d $odir/${csubj} ]
+            then
+                mkdir $odir/${csubj}
+            fi
+
+            if [ ! -d $odir/${csubj}/mrgd ]
+            then
+                mkdir $odir/${csubj}/mrgd
+            fi
+
+            sjrt=$rootdir/$csubj
+            rundirs=`dirls -d $sjrt -p $runpfx`
+            runlst=""
+            for crun in $rundirs
+            do
+                if [ ! -d $odir/${csubj}/${crun} ]
+                then
+                    mkdir $odir/${csubj}/${crun}
+                fi
+                echo "`format_tm $SECONDS`: .... preparing $crun"
+
+                fslmaths $sjrt/${crun}/${csubj}_${crun} -thrp 5 $odir/${csubj}/${crun}/${csubj}_${crun}_thr
+
+                echo "arguments = \"-in $odir/${csubj}/${crun}/${csubj}_${crun}_thr -o $odir/${csubj}/${crun}/tmp_mc\"" >> $odir/init_mc.submit
+
+                echo "error  = $odir/${csubj}/${crun}/init_mc_${csubj}_\$(Process).e" >> $odir/init_mc.submit
+                echo "output = $odir/${csubj}/${crun}/init_mc_${csubj}_\$(Process).o" >> $odir/init_mc.submit
+
+                echo "Queue" >> $odir/init_mc.submit
+                echo ""      >> $odir/init_mc.submit
+
+            done
+        done
+
+        condor_waitend $odir/init_mc.submit $loc_flag
+
+        for csubj in $subjlst
+        do
+            echo "`format_tm $SECONDS`: working on $csubj"
+            for crun in $rundirs
+            do
+                echo "`format_tm $SECONDS`: .... preparing $crun"
+
+                fslmaths $odir/${csubj}/${crun}/tmp_mc -Tmean $odir/${csubj}/${crun}/tmp_mean
+                imrm $odir/${csubj}/${crun}/tmp_mc
+
+                bet $odir/${csubj}/${crun}/tmp_mean $odir/${csubj}/${crun}/tmp_mean_brain -f 0.2 -g 0 -m -t
+                imrm $odir/${csubj}/${crun}/tmp_mean_brain
+                imrm $odir/${csubj}/${crun}/tmp_mean
+
+                fslmaths $odir/${csubj}/${crun}/tmp_mean_brain_mask -kernel box 15 -dilM $odir/${csubj}/${crun}/${csubj}_${crun}_lrgbrain -odt char
+                imrm $odir/${csubj}/${crun}/tmp_mean_brain_mask
+
+                fslmaths $odir/${csubj}/${crun}/${csubj}_${crun}_thr -mas $odir/${csubj}/${crun}/${csubj}_${crun}_lrgbrain $odir/${csubj}/${crun}/${csubj}_${crun}
+
+                imrm $odir/${csubj}/${crun}/${csubj}_${crun}_lrgbrain
+                imrm $odir/${csubj}/${crun}/${csubj}_${crun}_thr
+                runlst="$runlst $odir/${csubj}/${crun}/${csubj}_${crun}"
+            done
+        done
+    fi
+
+# ### ########################################################################## ### #
+##### motion correct
+    if [ $combruns -eq 1 ]   # combine runs
+    then
+	echo "`format_tm $SECONDS`: .... merging all runs"
+
+    echo "$mergeHDR" > $odir/mergefiles.submit
+	for csubj in $subjlst
+	do
+		sjrt="$rootdir/$csubj"
+		rdirs=$(dirls -d $sjrt -p $runpfx)
+		runlst=""
+        for crun in $rdirs
+        do
+			runlst="$runlst $odir/${csubj}/${crun}/${csubj}_${crun}"
+		done
+		echo "`format_tm $SECONDS`: working on $csubj"
+		echo "arguments = \"-t $odir/${csubj}/mrgd/${csubj}_mrgdruns $runlst\"" >> $odir/mergefiles.submit
+
+		echo "error  = $odir/${csubj}/mrgd/mergefiles_${csubj}_\$(Process).e" >> $odir/mergefiles.submit
+		echo "output = $odir/${csubj}/mrgd/mergefiles_${csubj}_\$(Process).o" >> $odir/mergefiles.submit
+
+		echo "Queue" >> $odir/mergefiles.submit
+		echo ""      >> $odir/mergefiles.submit
+	done
+
+    condor_waitend $odir/mergefiles.submit $loc_flag
+
+	echo "`format_tm $SECONDS`: .... run motion correction on merged runs"
+	echo "$mcflirtHDR" > $odir/mrgd_mc.submit
+	for csubj in $subjlst
+	do
+ 		echo "`format_tm $SECONDS`: .... mcflirt on combined data set"
+ 		if [ -d $odir/${csubj}/mrgd/${csubj}_mrgdruns_mc.mat ]
+ 		then
+ 			rm -r $odir/${csubj}/mrgd/${csubj}_mrgdruns_mc.mat
+ 		fi
+   		echo "arguments = \"-in $odir/${csubj}/mrgd/${csubj}_mrgdruns -o $odir/${csubj}/mrgd/${csubj}_mrgdruns_mc -plots -mats -stages 4 -sinc_final\"" >> $odir/mrgd_mc.submit
+# 		echo "arguments = \"-in $odir/${csubj}/mrgd/${csubj}_mrgdruns -o $odir/${csubj}/mrgd/${csubj}_mrgdruns_mc -plots -mats -report\"" >> $odir/mrgd_mc.submit
+
+		echo "error  = $odir/${csubj}/mrgd/mrgd_mc_${csubj}_\$(Process).e" >> $odir/mrgd_mc.submit
+		echo "output = $odir/${csubj}/mrgd/mrgd_mc_${csubj}_\$(Process).o" >> $odir/mrgd_mc.submit
+
+		echo "Queue" >> $odir/mrgd_mc.submit
+		echo ""      >> $odir/mrgd_mc.submit
+	done
+
+    condor_waitend $odir/mrgd_mc.submit $loc_flag
+
+	echo "`format_tm $SECONDS`: post motion correction processing"
+	for csubj in $subjlst
+	do
+	echo "`format_tm $SECONDS`: working on $csubj"
+		plot_MCpar $odir/${csubj}/mrgd/${csubj}_mrgdruns_mc.par $odir/${csubj}/mrgd/${csubj}_mrgdruns_mcpar
+		fslmaths   $odir/${csubj}/mrgd/${csubj}_mrgdruns_mc -Tmean $odir/${csubj}/mrgd/${csubj}_mrgdruns_mean
+        fslmaths   $odir/${csubj}/mrgd/${csubj}_mrgdruns_mc -Tstd $odir/${csubj}/mrgd/${csubj}_mrgdruns_std
+		bet $odir/${csubj}/mrgd/${csubj}_mrgdruns_mean $odir/${csubj}/mrgd/${csubj}_mrgdruns_brain -f 0.2 -g 0 -m -t
+
+		runstart=0
+		echo "`format_tm $SECONDS`: .... splitting motion corrected files"
+		for crun in $rundirs
+		do
+			echo ".... .... ${crun}"
+            if [ ! -d $odir/${csubj}/${crun}/${csubj}_${crun}_mc.mat ]
+            then
+                mkdir $odir/${csubj}/${crun}/${csubj}_${crun}_mc.mat
+            fi
+
+			cnvols=`fslnvols  $odir/${csubj}/${crun}/${csubj}_${crun}`
+
+			fslroi $odir/${csubj}/mrgd/${csubj}_mrgdruns_mc $odir/${csubj}/${crun}/${csubj}_${crun}_mc $runstart $cnvols
+			tail -n +$(($runstart+1))  $odir/${csubj}/mrgd/${csubj}_mrgdruns_mc.par | head -n $cnvols > $odir/${csubj}/${crun}/${csubj}_${crun}_mc.par
+
+			plot_MCpar $odir/${csubj}/${crun}/${csubj}_${crun}_mc.par $odir/${csubj}/${crun}/${csubj}_${crun}_mcpar
+
+            fslmaths $odir/${csubj}/${crun}/${csubj}_${crun}_mc -Tmean $odir/${csubj}/${crun}/${csubj}_${crun}_mean
+            bet $odir/${csubj}/${crun}/${csubj}_${crun}_mean $odir/${csubj}/${crun}/${csubj}_${crun}_brain -f 0.2 -g 0 -m -t
+
+			volcnt=0
+			while [ $volcnt -lt $cnvols ]
+			do
+				rstr=`printf "%04d" $(($runstart+$volcnt))`
+				vstr=`printf "%04d" $(($volcnt))`
+
+				cp $odir/${csubj}/mrgd/${csubj}_mrgdruns_mc.mat/MAT_$rstr $odir/${csubj}/${crun}/${csubj}_${crun}_mc.mat/MAT_$vstr
+
+				volcnt=$(($volcnt+1))
+			done
+			runstart=$(($runstart+$cnvols))
+		done
+	done  # for csubj in $subjlst
+
+# ### ############################################################################### ### #
+else  # single runs
+        echo "`format_tm $SECONDS`: .... mcflirt on single runs"
+        echo "$mcflirtHDR" > $odir/sglrun_mc.submit
+        for csubj in $subjlst
+        do
+        echo "`format_tm $SECONDS`: working on $csubj"
+            sjrt=$rootdir/$csubj
+            rundirs=$(dirls -d $sjrt -p $runpfx)
+            for crun in $rundirs
+            do
+                echo "`format_tm $SECONDS`: .... .... ${crun}"
+                 if [ -d $odir/${csubj}/${crun}/${csubj}_${crun}_smc.mat ]
+                 then
+                     rm -r $odir/${csubj}/${crun}/${csubj}_${crun}_smc.mat
+                 fi
+
+                echo "arguments = \"-in $odir/${csubj}/${crun}/${csubj}_${crun} -o $odir/${csubj}/${crun}/${csubj}_${crun}_smc -plots -mats -stages 4 -sinc_final\"" >> $odir/sglrun_mc.submit
+
+                echo "error  = $odir/${csubj}/${crun}/init_smc_${csubj}_\$(Process).e" >> $odir/sglrun_mc.submit
+                echo "output = $odir/${csubj}/${crun}/init_smc_${csubj}_\$(Process).o" >> $odir/sglrun_mc.submit
+
+                echo "Queue" >> $odir/sglrun_mc.submit
+                echo ""      >> $odir/sglrun_mc.submit
+            done
+        done
+
+        condor_waitend $odir/sglrun_mc.submit $loc_flag
+
+        echo "`format_tm $SECONDS`: .... mcflirt on single runs"
+        echo "$mcflirtHDR" > $odir/meanrun_mc.submit
+        for csubj in $subjlst
+        do
+          echo "`format_tm $SECONDS`: working on $csubj"
+          meanfls=""
+          for crun in $rundirs
+            do
+                echo "`format_tm $SECONDS`:.... .... ${crun}"
+                plot_MCpar $odir/${csubj}/${crun}/${csubj}_${crun}_smc.par $odir/${csubj}/${crun}/${csubj}_${crun}_smcpar
+                fslmaths $odir/${csubj}/${crun}/${csubj}_${crun}_smc -Tmean $odir/${csubj}/${crun}/${csubj}_${crun}_mean
+                bet $odir/${csubj}/${crun}/${csubj}_${crun}_mean $odir/${csubj}/${crun}/${csubj}_${crun}_brain -f 0.2 -g 0 -m -t
+
+                meanfls="$meanfls $odir/${csubj}/${crun}/${csubj}_${crun}_brain"
+            done
+
+            echo "`format_tm $SECONDS`:.... merging mean epi of runs and coregister them"
+            fslmerge -t $odir/${csubj}/mrgd/${csubj}_meants $meanfls
+
+            if [ -d $odir/${csubj}/mrgd/${csubj}_meants_mc.mat ]
+            then
+                rm -r $odir/${csubj}/mrgd/${csubj}_meants_mc.mat
+            fi
+            echo "arguments = \"-in $odir/${csubj}/mrgd/${csubj}_meants -o $odir/${csubj}/mrgd/${csubj}_meants_mc -plots -mats -stages 4 -sinc_final\"" >> $odir/meanrun_mc.submit
+
+            echo "error  = $odir/${csubj}/mrgd/mrgd_mc_${csubj}_\$(Process).e" >> $odir/meanrun_mc.submit
+            echo "output = $odir/${csubj}/mrgd/mrgd_mc_${csubj}_\$(Process).o" >> $odir/meanrun_mc.submit
+
+            echo "Queue" >> $odir/meanrun_mc.submit
+            echo ""      >> $odir/meanrun_mc.submit
+        done
+
+        condor_waitend $odir/meanrun_mc.submit $loc_flag
+
+        echo "$matapplyHDR" > $odir/sgl_runmatapply.submit
+
+        for csubj in $subjlst
+        do
+            echo "`format_tm $SECONDS`: working on $csubj"
+            plot_MCpar $odir/${csubj}/mrgd/${csubj}_meants_mc.par $odir/${csubj}/mrgd/${csubj}_meants_mcpar
+#             fslmaths $odir/${csubj}/mrgd/${csubj}_meants_mc -Tmean $odir/${csubj}/mrgd/${csubj}_mrgdruns_mean
+#             bet $odir/${csubj}/mrgd/${csubj}_mrgdruns_mean $odir/${csubj}/mrgd/${csubj}_mrgdruns_brain -f 0.2 -g 0 -m -t
+
+            echo ".... .... ${crun}"
+            if [ ! -d $odir/${csubj}/mrgd/${csubj}_mrgdruns_mc.mat ]
+            then
+                mkdir $odir/${csubj}/mrgd/${csubj}_mrgdruns_mc.mat
+            fi
+
+            tsfls=""
+            echo "`format_tm $SECONDS`: .... apply transformation"
+            for crun in $rundirs
+            do
+                sstr=`printf "%04d" $(($cnt))`
+                echo "`format_tm $SECONDS`:.... .... ${crun}"
+
+                echo "arguments = \"$odir/${csubj}/mrgd/${csubj}_meants_mc.mat/MAT_$sstr $odir/${csubj}/${crun}/${csubj}_${crun}_smc.mat -o $odir/${csubj}/${crun}/${csubj}_${crun}_mc -sinc -ref $odir/${csubj}/run01/${csubj}_run01_smc\"" >> $odir/sgl_runmatapply.submit
+
+                echo "error  = $odir/${csubj}/${crun}/${crun}_${csubj}_matapply_\$(Process).e" >> $odir/sgl_runmatapply.submit
+                echo "output = $odir/${csubj}/${crun}/${crun}_${csubj}_matapply_\$(Process).o" >> $odir/sgl_runmatapply.submit
+
+                echo "Queue" >> $odir/sgl_runmatapply.submit
+                echo ""      >> $odir/sgl_runmatapply.submit
+            done
+        done
+
+        condor_waitend $odir/sgl_runmatapply.submit $loc_flag
+
+        echo "`format_tm $SECONDS`: .... merging coregistered EPI time series"
+        echo "$mergeHDR" > $odir/mergefiles.submit
+        for csubj in $subjlst
+        do
+            runstart=0
+            for crun in $rundirs
+            do
+                cnvols=`fslnvols  $odir/${csubj}/${crun}/${csubj}_${crun}`
+                volcnt=0
+                while [ $volcnt -lt $cnvols ]
+                do
+                    rstr=`printf "%04d" $(($runstart+$volcnt))`
+                    vstr=`printf "%04d" $(($volcnt))`
+
+                    cp $odir/${csubj}/${crun}/${csubj}_${crun}_mc.mat/MAT_$vstr $odir/${csubj}/mrgd/${csubj}_mrgdruns_mc.mat/MAT_$rstr
+
+                    volcnt=$(($volcnt+1))
+                done
+                runstart=$(($runstart+$cnvols))
+            done
+
+            fsl_mcpar  $odir/${csubj}/mrgd/${csubj}_mrgdruns_mc.mat -out $odir/${csubj}/mrgd/${csubj}_mrgdruns_mc.par
+            plot_MCpar $odir/${csubj}/mrgd/${csubj}_mrgdruns_mc.par $odir/${csubj}/mrgd/${csubj}_mrgdruns_mcpar
+
+            echo "`format_tm $SECONDS`: working on $csubj"
+            echo "arguments = \"-t $odir/${csubj}/mrgd/${csubj}_mrgdruns_mc $tsfls\"" >> $odir/mergefiles.submit
+
+            echo "error  = $odir/${csubj}/mrgd/mergefiles_${csubj}_\$(Process).e" >> $odir/mergefiles.submit
+            echo "output = $odir/${csubj}/mrgd/mergefiles_${csubj}_\$(Process).o" >> $odir/mergefiles.submit
+
+            echo "Queue" >> $odir/mergefiles.submit
+            echo ""      >> $odir/mergefiles.submit
+        done
+
+        condor_waitend $odir/mergefiles.submit $loc_flag
+
+        for csubj in $subjlst
+        do
+            tsfls=""
+            for crun in $rundirs
+            do
+                tsfls="$tsfls $odir/${csubj}/${crun}/${csubj}_${crun}_mc"
+            done
+
+            fslmerge -t $odir/${csubj}/mrgd/${csubj}_mrgdruns_mc $tsfls
+            fslmaths $odir/${csubj}/mrgd/${csubj}_mrgdruns_mc -Tmean $odir/${csubj}/mrgd/${csubj}_mrgdruns_mean
+            fslmaths $odir/${csubj}/mrgd/${csubj}_mrgdruns_mc -Tstd $odir/${csubj}/mrgd/${csubj}_mrgdruns_std
+            bet $odir/${csubj}/mrgd/${csubj}_mrgdruns_mean $odir/${csubj}/mrgd/${csubj}_mrgdruns_brain -f 0.2 -g 0 -m -t
+        done  # for csubj in $subjlst
+fi
+
+# ### ########################################################################## ### #
+## flirt to anatomy
+
+echo "$flirtHDR" > $odir/sgl_flirt2anat.submit
+
+    subjmeanlst=""
+    scnt=0
+    echo "`format_tm $SECONDS`: .... coregistered EPI to anatomy"
+    for csubj in $subjlst
+    do
+		subjmeanlst="$subjmeanlst $odir/${csubj}/mrgd/${csubj}_mrgdruns_brain"
+
+		### coregister mean EPI o individual anatomical image
+         echo "`format_tm $SECONDS`: working on $csubj"
+
+		reffl=$rootdir/$csubj/anat/${csubj}_anat
+
+        echo "arguments = \" -in $odir/${csubj}/mrgd/${csubj}_mrgdruns_brain -ref $reffl -cost corratio -searchcost corratio -omat $odir/${csubj}/mrgd/EPI2Anat_6DOF.mat  -searchrx -10 10  -searchry -10 10 -searchrz -10 10 -dof 6\"" >> $odir/sgl_flirt2anat.submit
+
+        echo "error  = $odir/${csubj}/mrgd/mrgd_flirt6_${csubj}_\$(Process).e" >> $odir/sgl_flirt2anat.submit
+        echo "output = $odir/${csubj}/mrgd/mrgd_flirt6_${csubj}_\$(Process).o" >> $odir/sgl_flirt2anat.submit
+
+        echo "Queue" >> $odir/sgl_flirt2anat.submit
+        echo ""      >> $odir/sgl_flirt2anat.submit
+
+        echo "arguments = \" -in $odir/${csubj}/mrgd/${csubj}_mrgdruns_brain -ref $reffl -cost corratio -searchcost corratio -omat $odir/${csubj}/mrgd/EPI2Anat_7DOF.mat  -searchrx -10 10  -searchry -10 10 -searchrz -10 10 -dof 7\"" >> $odir/sgl_flirt2anat.submit
+
+        echo "error  = $odir/${csubj}/mrgd/mrgd_flirt7_${csubj}_\$(Process).e" >> $odir/sgl_flirt2anat.submit
+        echo "output = $odir/${csubj}/mrgd/mrgd_flirt7_${csubj}_\$(Process).o" >> $odir/sgl_flirt2anat.submit
+
+        echo "Queue" >> $odir/sgl_flirt2anat.submit
+        echo ""      >> $odir/sgl_flirt2anat.submit
+
+        echo "arguments = \"-in $odir/${csubj}/mrgd/${csubj}_mrgdruns_brain -ref $reffl -cost corratio -searchcost corratio -omat $odir/${csubj}/mrgd/EPI2Anat_12DOF.mat -searchrx -10 10  -searchry -10 10 -searchrz -10 10 -dof 12\"" >> $odir/sgl_flirt2anat.submit
+
+        echo "error  = $odir/${csubj}/mrgd/mrgd_flirt12_${csubj}_\$(Process).e" >> $odir/sgl_flirt2anat.submit
+        echo "output = $odir/${csubj}/mrgd/mrgd_flirt12_${csubj}_\$(Process).o" >> $odir/sgl_flirt2anat.submit
+
+        echo "Queue" >> $odir/sgl_flirt2anat.submit
+        echo ""      >> $odir/sgl_flirt2anat.submit
+        scnt=$(($scnt+1))
+    done
+    condor_waitend $odir/sgl_flirt2anat.submit $loc_flag
+
+    echo "$checkregHDR" > $odir/sgl_checkreg.submit
+
+    echo "`format_tm $SECONDS`: .... run chkreg"
+    reffl=$rootdir/$csubj/anat/${csubj}_anat
+    for csubj in $subjlst
+    do
+         echo "`format_tm $SECONDS`: working on $csubj"
+
+        echo "arguments = \"$odir/${csubj}/mrgd/${csubj}_mrgdruns_mean $reffl $odir/${csubj}/mrgd/EPI2Anat_12DOF.mat $odir/${csubj}/mrgd/EPI2Anat_chkreg_12DOF\"" >> $odir/sgl_checkreg.submit
+
+        echo "error  = $odir/${csubj}/mrgd/mrgd_checkreg12_${csubj}_\$(Process).e" >> $odir/sgl_checkreg.submit
+        echo "output = $odir/${csubj}/mrgd/mrgd_checkreg12_${csubj}_\$(Process).o" >> $odir/sgl_checkreg.submit
+
+        echo "Queue" >> $odir/sgl_checkreg.submit
+        echo ""      >> $odir/sgl_checkreg.submit
+
+        echo "arguments = \"$odir/${csubj}/mrgd/${csubj}_mrgdruns_mean $reffl $odir/${csubj}/mrgd/EPI2Anat_7DOF.mat $odir/${csubj}/mrgd/EPI2Anat_chkreg_7DOF\"" >> $odir/sgl_checkreg.submit
+
+        echo "error  = $odir/${csubj}/mrgd/mrgd_checkreg7_${csubj}_\$(Process).e" >> $odir/sgl_checkreg.submit
+        echo "output = $odir/${csubj}/mrgd/mrgd_checkreg7_${csubj}_\$(Process).o" >> $odir/sgl_checkreg.submit
+
+        echo "Queue" >> $odir/sgl_checkreg.submit
+        echo ""      >> $odir/sgl_checkreg.submit
+
+        echo "arguments = \"$odir/${csubj}/mrgd/${csubj}_mrgdruns_mean $reffl $odir/${csubj}/mrgd/EPI2Anat_6DOF.mat $odir/${csubj}/mrgd/EPI2Anat_chkreg_6DOF\"" >> $odir/sgl_checkreg.submit
+
+        echo "error  = $odir/${csubj}/mrgd/mrgd_checkreg6_${csubj}_\$(Process).e" >> $odir/sgl_checkreg.submit
+        echo "output = $odir/${csubj}/mrgd/mrgd_checkreg6_${csubj}_\$(Process).o" >> $odir/sgl_checkreg.submit
+
+        echo "Queue" >> $odir/sgl_checkreg.submit
+        echo ""      >> $odir/sgl_checkreg.submit
+
+	done  # for csubj in $subjlst
+
+    condor_waitend $odir/sgl_checkreg.submit $loc_flag -go
+fi
+
+# ### ########################################################################## ### #
+### coregister all EPI images with each other
+if [ ! -d $odir/groupdata ]
+then
+    mkdir $odir/groupdata
+fi
+
+# first coregister to first subject of list
+echo "`format_tm $SECONDS`: .... first coregistration of all subjects"
+
+echo "$flirtHDR" > $odir/all_flirt2anat.submit
+
+mcnt=1
+coreglst=""
+for csubj in $subjlst
+do
+	echo "`format_tm $SECONDS`: .... .... ${csubj}"
+    if [ $mcnt -eq 1 ]
+    then
+        cref=$odir/${csubj}/mrgd/${csubj}_mrgdruns_brain
+        imcp $odir/${csubj}/mrgd/${csubj}_mrgdruns_brain $odir/groupdata/group_coreg_${csubj}
+        cp $FSLDIR/etc/flirtsch/ident.mat $odir/groupdata/${csubj}2refepi.mat
+
+    else
+        vstr=`printf "%04d" $mcnt`
+        echo "arguments = \"-in $odir/${csubj}/mrgd/${csubj}_mrgdruns_brain -ref $cref -dof 12 -searchcost normcorr -o $odir/groupdata/group_coreg_${csubj} -omat $odir/groupdata/${csubj}2refepi.mat -searchrx -10 10  -searchry -10 10 -searchrz -10 10\"" >> $odir/all_flirt2anat.submit
+
+        echo "error  = $odir/groupdata/${csubj}_2ref_init_\$(Process).e" >> $odir/all_flirt2anat.submit
+        echo "output = $odir/groupdata/${csubj}_2ref_init_\$(Process).o" >> $odir/all_flirt2anat.submit
+
+        echo "Queue" >> $odir/all_flirt2anat.submit
+        echo ""      >> $odir/all_flirt2anat.submit
+
+		coreglst="$coreglst $odir/groupdata/group_coreg_${csubj}"
+    fi
+    mcnt=$(($mcnt+1))
+done
+
+condor_waitend $odir/all_flirt2anat.submit $loc_flag
+
+fslmerge -t $odir/groupdata/groupTS $coreglst
+fslmaths $odir/groupdata/groupTS -Tmean $odir/groupdata/group_mean
+
+# now iterate coregistrations to the mean volume of all subjects
+echo "`format_tm $SECONDS`: .... iterative coregistration to mean EPI"
+cnit=0
+while [ $cnit -lt $nit ]
+do
+	echo "`format_tm $SECONDS`: .... .... iteration $(($mcnt+1))"
+	echo "$flirtHDR" > $odir/all_flirt2anat_${cnit}.submit
+    for csubj in $subjlst
+    do
+		echo "`format_tm $SECONDS`: .... .... .... ${csubj}"
+        vstr=`printf "%04d" $mcnt`
+        echo "arguments = \"-in $odir/groupdata/group_coreg_${csubj} -ref $odir/groupdata/group_mean -dof 12 -searchcost normcorr  -omat $odir/groupdata/tmp_${csubj}2ref.mat -nosearch\"" >> $odir/all_flirt2anat_${cnit}.submit
+
+        echo "error  = $odir/groupdata/${csubj}_2ref_it${cnit}_\$(Process).e" >> $odir/all_flirt2anat_${cnit}.submit
+        echo "output = $odir/groupdata/${csubj}_2ref_it${cnit}_\$(Process).o" >> $odir/all_flirt2anat_${cnit}.submit
+
+        echo "Queue" >> $odir/all_flirt2anat_${cnit}.submit
+        echo ""      >> $odir/all_flirt2anat_${cnit}.submit
+    done
+
+    condor_waitend $odir/all_flirt2anat_${cnit}.submit $loc_flag
+
+    csfllst=""
+    for csubj in $subjlst
+    do
+        convert_xfm -omat $odir/groupdata/tmp_${csubj}2refepi.mat -concat $odir/groupdata/tmp_${csubj}2ref.mat $odir/groupdata/${csubj}2refepi.mat
+
+        mv -f $odir/groupdata/tmp_${csubj}2refepi.mat $odir/groupdata/${csubj}2refepi.mat
+        rm    $odir/groupdata/tmp_${csubj}2ref.mat
+
+        flirt -in $odir/${csubj}/mrgd/${csubj}_mrgdruns_brain -ref $odir/groupdata/group_mean -init $odir/groupdata/${csubj}2refepi.mat -o $odir/groupdata/group_coreg_${csubj} -applyxfm
+
+        csfllst="$csfllst $odir/groupdata/group_coreg_${csubj}"
+    done
+
+ 	echo "`format_tm $SECONDS`: .... .... merging and averaging all files"
+    fslmerge -t $odir/groupdata/groupTS $csfllst
+    fslmaths    $odir/groupdata/groupTS -Tmean $odir/groupdata/group_mean
+
+    cnit=$(($cnit+1))
+done
+
+echo "`format_tm $SECONDS`: .... betting mean reference EPI"
+
+bet $odir/groupdata/group_mean $odir/groupdata/group_brain -f 0.2 -g 0 -m -t
+fslmaths $odir/groupdata/group_brain_mask -kernel box 10 -dilM -bin $odir/groupdata/group_brain_dilmask -odt char
+fslmaths $odir/groupdata/groupTS -Tmin -mul $odir/groupdata/group_brain_mask -bin $odir/groupdata/group_unity_mask -odt char
+
+### coregister to reference (just obtain transformation matrix)
+echo "`format_tm $SECONDS`: .... coregister reference EPI to MNI space"
+flirt -in $odir/groupdata/group_brain -ref $refimg -o $odir/groupdata/group2MNI -dof 12 -omat $odir/groupdata/group2MNI.mat
+chkreg $odir/groupdata/group_brain $refimg $odir/groupdata/group2MNI.mat $odir/groupdata/group2MNI_chkreg
+
+# apply transformation to reference space on each individual functional data set
+echo "$matapplyHDR" > $odir/all_runmatapplyref.submit
+echo "`format_tm $SECONDS`: .... Transform each subjects EPI files into EPI reference space"
+for csubj in $subjlst
+do
+	echo ".... .... ${csubj}"
+    sjrt=$rootdir/$csubj
+    rundirs=`dirls -d $sjrt -p $runpfx`
+
+	echo "`format_tm $SECONDS`: .... .... .... ${crun}"
+
+    echo "arguments = \"$odir/groupdata/${csubj}2refepi.mat $odir/${csubj}/mrgd/${csubj}_mrgdruns_mc.mat -o $odir/${csubj}/mrgd/${csubj}_mrgdruns_ref -ref $odir/groupdata/group_mean -sinc\"" >> $odir/all_runmatapplyref.submit
+
+    echo "error  = $odir/${csubj}/mrgd/${csubj}_matapplyref_\$(Process).e" >> $odir/all_runmatapplyref.submit
+    echo "output = $odir/${csubj}/mrgd/${csubj}_matapplyref_\$(Process).o" >> $odir/all_runmatapplyref.submit
+
+    echo "Queue" >> $odir/all_runmatapplyref.submit
+    echo ""      >> $odir/all_runmatapplyref.submit
+done
+
+condor_waitend $odir/all_runmatapplyref.submit $loc_flag
+
+echo "Executable = $FSLDIR/bin/fslroi
+Universe = vanilla
+initialdir = $rootdir
+request_cpus = 1
+getenv = True
+notification = Never
+" > $odir/splitTS.submit
+
+echo "`format_tm $SECONDS`: .... splitting reference space files"
+for csubj in $subjlst
+do
+	echo ".... .... ${csubj}"
+    runstart=0
+	for crun in $rundirs
+	do
+		echo ".... .... ${crun}"
+		cnvols=`fslnvols  $odir/${csubj}/${crun}/${csubj}_${crun}`
+
+        echo "arguments = \"$odir/${csubj}/mrgd/${csubj}_mrgdruns_ref $odir/${csubj}/${crun}/${csubj}_${crun}_ref $runstart $cnvols\"" >> $odir/splitTS.submit
+
+        echo "error  = $odir/${csubj}/mrgd/${csubj}_fslroi_\$(Process).e" >> $odir/splitTS.submit
+        echo "output = $odir/${csubj}/mrgd/${csubj}_fslroi_\$(Process).o" >> $odir/splitTS.submit
+
+        echo "Queue" >> $odir/splitTS.submit
+        echo ""      >> $odir/splitTS.submit
+
+# 		fslroi $odir/${csubj}/mrgd/${csubj}_mrgdruns_ref $odir/${csubj}/${crun}/${csubj}_${crun}_ref $runstart $cnvols
+		tail -n +$(($runstart+1))  $odir/${csubj}/mrgd/${csubj}_mrgdruns_ref.par | head -n $cnvols > $odir/${csubj}/${crun}/${csubj}_${crun}_ref.par
+
+		plot_MCpar $odir/${csubj}/${crun}/${csubj}_${crun}_ref.par $odir/${csubj}/${crun}/${csubj}_${crun}_refpar
+
+		if [ -d   $odir/${csubj}/${crun}/${csubj}_${crun}_ref.mat ]
+		then
+			rm -r $odir/${csubj}/${crun}/${csubj}_${crun}_ref.mat
+		fi
+		mkdir     $odir/${csubj}/${crun}/${csubj}_${crun}_ref.mat
+
+        volcnt=0
+		while [ $volcnt -lt $cnvols ]
+		do
+			rstr=`printf "%04d" $(($runstart+$volcnt))`
+			vstr=`printf "%04d" $(($volcnt))`
+
+			cp $odir/${csubj}/mrgd/${csubj}_mrgdruns_ref.mat/MAT_$rstr $odir/${csubj}/${crun}/${csubj}_${crun}_ref.mat/MAT_$vstr
+
+			volcnt=$(($volcnt+1))
+		done
+
+		fsl_mcpar $odir/${csubj}/${crun}/${csubj}_${crun}_ref.mat -out $odir/${csubj}/${crun}/${csubj}_${crun}_refmc.par -corr
+		plot_MCpar $odir/${csubj}/${crun}/${csubj}_${crun}_refmc.par $odir/${csubj}/${crun}/${csubj}_${crun}_refmcpar
+
+		runstart=$(($runstart+$cnvols))
+	done
+done
+
+condor_waitend $odir/splitTS.submit $loc_flag
+
+echo "$checkregHDR" > $odir/sgl_refcheckreg.submit
+
+for csubj in $subjlst
+do
+    for crun in $rundirs
+    do
+		fslmaths $odir/${csubj}/${crun}/${csubj}_${crun}_ref -mas $odir/groupdata/group_brain_dilmask $odir/${csubj}/${crun}/${csubj}_${crun}_ref
+    done
+	echo ".... .... .... merged files"
+
+	fslmaths $odir/${csubj}/${crun}/${csubj}_${crun}_ref -mas $odir/groupdata/group_brain_dilmask $odir/${csubj}/${crun}/${csubj}_${crun}_ref
+	fslmaths $odir/${csubj}/${crun}/${csubj}_${crun}_ref -Tmean $odir/${csubj}/${crun}/${csubj}_${crun}_ref_mean
+	fslmaths $odir/${csubj}/${crun}/${csubj}_${crun}_ref -mas $odir/groupdata/group_brain_mask $odir/${csubj}/${crun}/${csubj}_${crun}_ref_brain
+
+	echo "`format_tm $SECONDS`: .... .... convert and check transformations"
+	convert_xfm -omat $odir/${csubj}/mrgd/${csubj}_Ref2EPI.mat -inverse $odir/groupdata/${csubj}2refepi.mat
+
+    convert_xfm -omat $odir/${csubj}/mrgd/${csubj}_Ref2Anat_12DOF.mat -concat $odir/${csubj}/mrgd/EPI2Anat_12DOF.mat $odir/${csubj}/mrgd/${csubj}_Ref2EPI.mat
+    convert_xfm -omat $odir/${csubj}/mrgd/${csubj}_Ref2Anat_7DOF.mat  -concat $odir/${csubj}/mrgd/EPI2Anat_7DOF.mat  $odir/${csubj}/mrgd/${csubj}_Ref2EPI.mat
+    convert_xfm -omat $odir/${csubj}/mrgd/${csubj}_Ref2Anat_6DOF.mat  -concat $odir/${csubj}/mrgd/EPI2Anat_6DOF.mat  $odir/${csubj}/mrgd/${csubj}_Ref2EPI.mat
+
+    echo "arguments = \"$odir/${csubj}/mrgd/${csubj}_mrgdruns_brain $odir/groupdata/group_brain $odir/groupdata/${csubj}2refepi.mat $odir/${csubj}/mrgd/${csubj}_Ref2Mrgd_chkreg\"" >> $odir/sgl_refcheckreg.submit
+
+    echo "error  = $odir/${csubj}/mrgd/mrgd_refcheckreg12_${csubj}_\$(Process).e" >> $odir/sgl_checkreg.submit
+    echo "output = $odir/${csubj}/mrgd/mrgd_refcheckreg12_${csubj}_\$(Process).o" >> $odir/sgl_checkreg.submit
+
+    echo "Queue" >> $odir/sgl_refcheckreg.submit
+    echo ""      >> $odir/sgl_refcheckreg.submit
+
+    echo "arguments = \"$odir/groupdata/group_brain $rootdir/$csubj/anatomy/${csubj}_anatomy $odir/${csubj}/mrgd/${csubj}_Ref2Anat_12DOF.mat $odir/${csubj}/mrgd/${csubj}_Ref2Anat_12DOF_chkreg\"" >> $odir/sgl_refcheckreg.submit
+
+    echo "error  = $odir/${csubj}/mrgd/mrgd_refcheckreg12_${csubj}_\$(Process).e" >> $odir/sgl_checkreg.submit
+    echo "output = $odir/${csubj}/mrgd/mrgd_refcheckreg12_${csubj}_\$(Process).o" >> $odir/sgl_checkreg.submit
+
+    echo "Queue" >> $odir/sgl_refcheckreg.submit
+    echo ""      >> $odir/sgl_refcheckreg.submit
+
+    echo "arguments = \"$odir/groupdata/group_brain $rootdir/$csubj/anatomy/${csubj}_anatomy $odir/${csubj}/mrgd/${csubj}_Ref2Anat_7DOF.mat $odir/${csubj}/mrgd/${csubj}_Ref2Anat_7DOF_chkreg\"" >> $odir/sgl_refcheckreg.submit
+
+    echo "error  = $odir/${csubj}/mrgd/mrgd_refcheckreg7_${csubj}_\$(Process).e" >> $odir/sgl_checkreg.submit
+    echo "output = $odir/${csubj}/mrgd/mrgd_refcheckreg7_${csubj}_\$(Process).o" >> $odir/sgl_checkreg.submit
+
+    echo "Queue" >> $odir/sgl_refcheckreg.submit
+    echo ""      >> $odir/sgl_refcheckreg.submit
+
+    echo "arguments = \"$odir/groupdata/group_brain $rootdir/$csubj/anatomy/${csubj}_anatomy $odir/${csubj}/mrgd/${csubj}_Ref2Anat_6DOF.mat $odir/${csubj}/mrgd/${csubj}_Ref2Anat_6DOF_chkreg\"" >> $odir/sgl_refcheckreg.submit
+
+    echo "error  = $odir/${csubj}/mrgd/mrgd_refcheckreg6_${csubj}_\$(Process).e" >> $odir/sgl_checkreg.submit
+    echo "output = $odir/${csubj}/mrgd/mrgd_refcheckreg6_${csubj}_\$(Process).o" >> $odir/sgl_checkreg.submit
+
+    echo "Queue" >> $odir/sgl_refcheckreg.submit
+    echo ""      >> $odir/sgl_refcheckreg.submit
+
+done
+
+condor_waitend $odir/sgl_refcheckreg.submit $loc_flag -go
+#______________________________________________________________________________________#
+if [ $keep_tmp -eq 0 ]
+then
+    rm -r $tmpdir
+fi
+

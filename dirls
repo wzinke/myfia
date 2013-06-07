@@ -1,0 +1,69 @@
+#!/bin/bash
+#
+# dirls
+#
+# created: 05.01.2012
+# by zinke
+#
+
+Usage() {
+cat << EOF
+
+    Usage: $0 [options]
+
+    OPTIONS:
+            -d      specify path to directory
+            -p      matching pattern for the directory name
+
+
+            ###########################################################
+            ##   (c) wolf zinke (2012) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##     for comments and questions: wolfzinke@gmx.net     ##
+            ###########################################################
+
+
+EOF
+exit 1
+
+}
+
+
+
+dosel=0
+srchpath='.'
+# ### ########################################################################## ### #
+#####
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+        -d)     srchpath=$2
+                shift 2
+                ;;
+        -p)     selpatt=$2
+                dosel=1
+                shift 2
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+# ### ########################################################################## ### #
+#####
+
+dirlist=`ls -l $srchpath | egrep '^d' |  awk '{print $9}'`
+
+if [ $dosel -eq 1 ]
+then
+    echo "$dirlist" | grep $selpatt
+else
+    echo "$dirlist"
+fi
+
+
