@@ -37,9 +37,10 @@ exit 1
 
 }
 
-# BUG: catch cases with no significant voxel
+# BUG:  catch cases with no significant voxel
+# TODO: calculate volume in mm3
 # TODO: Implement negative contrast
-# BUG: coordinate transformation with img2stdcoord give wrong results
+# BUG:  coordinate transformation with img2stdcoord give wrong results
 # TODO: implement use of local maxima
 # TODO: implement non-linear transformations
 # TODO: allow more than one atlas
@@ -73,6 +74,8 @@ do_p=0
 do_mask=0
 do_reg=0
 maskfl=""
+do_lm=0
+lmstr=""
 
 while [ $# -gt 0 ] ;
 do
@@ -81,7 +84,9 @@ do
                 ohdstr="> $2"
                 shift 2
                 ;;
-       -lmax)   get_lmax=1
+       -lmax)   do_lm=1
+                lmstr=""
+                echo "WARNING: local maxima not implemented yet!"
                 shift
                 ;;
         -mat)   matfl=$2
@@ -180,6 +185,7 @@ fi
 
 cat $cltbl | grep -v luster  > $tmpdir/clustloc.dat
 
+# read in the cluster table
 cNM=""
 IDHDstr=""
 while read zeile
@@ -261,6 +267,13 @@ else
 fi
 
 eval "cat $tmpdir/mnitbl.dat $ostr"
+
+
+#
+# fi [ $do_lm -eq 1 ]
+# then
+#
+# fi
 
 #__________________________________________________________________________________________#
 

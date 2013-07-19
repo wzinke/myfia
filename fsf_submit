@@ -11,17 +11,17 @@ cat << EOF
 
     Usage: $0 <fsfdir> [options] -o
 
-		Submitts all <fsfdir> files found in directory to condor. This argument
-		also could refer to a text file listing all fsf files.
+        Submitts all <fsfdir> files found in directory to condor. This argument
+        also could refer to a text file listing all fsf files.
 
     OPTIONS:
-			-o		name of condor submit file
-			-mem	expected memory usage (default: 8GB)
-			-idir	initial directory (default: pwd)
-			-loc	run locally instead of using condor
-			-lp		number of local processors used. This sets
-					also the -loc argument. (requires condor_waitend!)
-			-nx		do not submit processes, just create file
+            -o      name of condor submit file
+            -mem    expected memory usage (default: 8GB)
+            -idir   initial directory (default: pwd)
+            -loc    run locally instead of using condor
+            -lp     number of local processors used. This sets
+                    also the -loc argument. (requires condor_waitend!)
+            -nx     do not submit processes, just create file
 
             ###########################################################
             ##   (c) wolf zinke (2013) - part of the MaFIA toolbox   ##
@@ -54,19 +54,19 @@ loc_flag=""
 while [ $# -gt 0 ] ;
 do
     case $1 in
-          -o)	onm=$2
+          -o)    onm=$2
                 shift 2
                 ;;
-        -mem)	memusg=$2
+        -mem)    memusg=$2
                 shift 2
                 ;;
-       -idir)	idir=$2
+       -idir)    idir=$2
                 shift 2
                 ;;
-         -nx)	do_sub=0
+         -nx)    do_sub=0
                 shift
                 ;;
-         -lp)	loc_flag="-loc -nproc $2"
+         -lp)    loc_flag="-loc -nproc $2"
                 shift 2
                 ;;
           -*)   echo "Wrong option: <$1>"
@@ -83,10 +83,10 @@ done
 # test if directory or files
 if [[ -d $fsfdir ]]
 then
-	fsflst=`ls -1 $fsfdir/*.fsf`
+    fsflst=`ls -1 $fsfdir/*.fsf`
 elif [[ -f $fsfdir ]]
 then
-	fsflst=`cat $fsfdir`
+    fsflst=`cat $fsfdir`
 else
     echo "ERROR: $fsfdir is neither a directory nor a list"
     exit 1
@@ -94,7 +94,7 @@ fi
 
 if [ ! -d $idir/log ]
 then
-	mkdir $idir/log
+    mkdir $idir/log
 fi
 
 # create condor header
@@ -108,22 +108,22 @@ getenv = True
 
 for cfsf in $fsflst
 do
-# 	cstem=`echo "$cfsf" | basename | sed -e 's/.fsf//g'`
-	cstem=`basename "$cfsf" | sed -e 's/.fsf//g'`
+#     cstem=`echo "$cfsf" | basename | sed -e 's/.fsf//g'`
+    cstem=`basename "$cfsf" | sed -e 's/.fsf//g'`
 
-	if [[ ! "$1" = /* ]]
-	then
-		cfsf=`pwd`/$cfsf
-	fi
+    if [[ ! "$1" = /* ]]
+    then
+        cfsf=`pwd`/$cfsf
+    fi
 
-	echo "arguments = $cfsf" >> $onm
-	echo "error  = $idir/log/$cstem.e\$(Process)" >> $onm
-	echo "output = $idir/log/$cstem.o\$(Process)" >> $onm
-	echo "Queue" >> $onm
+    echo "arguments = $cfsf" >> $onm
+    echo "error  = $idir/log/$cstem.e\$(Process)" >> $onm
+    echo "output = $idir/log/$cstem.o\$(Process)" >> $onm
+    echo "Queue" >> $onm
 
 if [ $do_sub -eq 1 ]
 then
-	condor_submit $onm $loc_flag
+    condor_waitend $onm $loc_flag
 fi
 
 
