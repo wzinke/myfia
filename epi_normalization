@@ -1,0 +1,156 @@
+#!/bin/bash
+#
+# created: 17.01.2009
+# by zinke
+#
+
+Usage() {
+cat << EOF
+
+    Usage: epi_normalization <epiTS> [options]
+
+    apply a global or volume wise normalization using, mean, median
+    or median absolute deviation (MAD).
+
+    OPTIONS:
+            -median     use median instead of mean
+            -mad        use median absolute deviation
+            -vol        perform a volume wise normalization
+            -mask       use file for masking region
+            -val        normalize to this value (default: 1000)
+            -dat        writes values used for the normalization
+            -out        output name
+            -keep       do not delete temporary files
+
+            ###########################################################
+            ##   (c) wolf zinke (2009) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+EOF
+exit 1
+}
+
+if [ $# -lt 1 ]; then
+    Usage
+else
+    flnm=$1;
+    shift
+fi
+#----------------------------------------------------------------------#
+
+outnm=${flnm}_norm
+keep_tmp=0
+do_mean=1
+wrtvals=0
+do_glob=1
+normval=1000
+statopt=""
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+    -out)   outnm=$2
+            shift 2
+            ;;
+  -median)  do_mean=0
+            shift
+            ;;
+     -mad)  do_mean=-1
+            shift
+            ;;
+     -vol)  do_glob=0
+            shift
+            ;;
+     -val)  normval=$2
+            shift 2
+            ;;
+     -dat)  wrtvals=1
+            shift
+            ;;
+    -mask)  statopt="$statopt -k $2"
+            shift 2
+            ;;
+    -keep)  keep_tmp=1
+            shift
+            ;;
+       -*)  echo "Wrong option: <$1>"
+            echo ""
+            Usage
+            ;;
+        *)  break
+            ;;
+    esac
+done
+
+tmpdir=`tmpnam tmpNORM`
+rm $tmpdir
+mkdir $tmpdir
+#----------------------------------------------------------------------#
+
+if [ $do_mean -eq 1 ]
+then
+    statopt="$statopt -M"
+else
+    statopt="$statopt -P 50"
+fi
+
+#----------------------------------------------------------------------#
+
+if [ $do_glob -eq 1 ]
+then
+    glob_val=`fslstats ${flnm} $statopt`
+
+    if [ $do_mean -eq -1 ]  # use median absolute deviation
+    then
+        fslmaths ${flnm} -sub $glob_val -abs $tmpdir/medabs
+        glob_scal=`fslstats ${flnm} $statopt`
+        fslmaths ${flnm} -sub $glob_val -div $glob_scal -mul $normval -add $normval $outnm -odt float
+    else
+        fslmaths ${flnm} -div $glob_val -mul $normval $outnm -odt float
+    fi
+
+    if [ $wrtvals -eq 1 ]
+    then
+        echo "$glob_val"
+    fi
+else  # if [ $do_glob -eq 1 ]
+    mkdir $tmpdir/sglvol
+    mkdir $tmpdir/sglvolnorm
+
+    fslsplit ${flnm} $tmpdir/sglvol/vol_ -t
+    vol_lst=`ls -1 $tmpdir/sglvol/vol_*`
+    nvols=""
+
+    cnt=0
+    for cvol in $vol_lst
+    do
+        cnt=$(($cnt+1))
+        glob_val=`fslstats $cvol $statopt`
+
+        if [ $do_mean -eq -1 ]  # use median absolute deviation
+        then
+            fslmaths $cvol -sub $glob_val -abs $tmpdir/medabs
+            glob_scal=`fslstats ${flnm} $statopt`
+            fslmaths $cvol -sub $glob_val -div $glob_scal -mul $normval -add $normval $tmpdir/sglvolnorm/vol_$cnt -odt float
+        else
+            fslmaths $cvol -div $glob_val -mul $normval $tmpdir/sglvolnorm/vol_$cnt -odt float
+        fi
+
+        nvols="$nvols $tmpdir/sglvolnorm/vol_$cnt"
+        if [ $wrtvals -eq 1 ]
+        then
+            echo "$glob_val"
+        fi
+    done
+    fslmerge -t $outnm $nvols
+fi  # if [ $do_glob -eq 1 ]
+
+#----------------------------------------------------------------------#
+
+if [ $keep_tmp -eq 0 ]
+then
+    rm -r $tmpdir
+fi
+
