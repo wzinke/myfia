@@ -22,7 +22,7 @@ cat << EOF
             -refmask    weighting mask for the reference image, unless specified no weightning will be done
             -rob        use robust betting on each volume (time consuming!)
                         (use 'thr' or 'bet' as option, or specify a mask file)
-            -ip         interpolation (trilinear,nearestneighbour,sinc); default: trilinear
+            -ip         interpolation (trilinear,nearestneighbour,sinc,spline); default: trilinear
             -sm         use smoothing with fwhm given here prior coregistration
             -init       use transformationmatrix of previous volume to initialize the following
             -final      coregister mean image of motion corrected series
@@ -289,9 +289,9 @@ do
 
     if [ $do_hdr -eq 1 ]
     then
-        flirt -in ${tmpdir}/${curr_vol} -ref $rsmpl_hdr -o ${tmpdir}/mc_${curr_vol} -init ${outnm}.mat/${curr_vol} $flirt_fun_par -applyxfm
+        flirt -in ${tmpdir}/${curr_vol} -ref $rsmpl_hdr -o ${tmpdir}/mc_${curr_vol} -init ${outnm}.mat/${curr_vol} $flirt_fun_par -applyxfm $trans_fun_par spline
     else
-        flirt -in ${tmpdir}/${curr_vol} -ref ${tmpdir}/${curr_vol} -o ${tmpdir}/mc_${curr_vol} -init ${outnm}.mat/${curr_vol} $flirt_fun_par -applyxfm
+        flirt -in ${tmpdir}/${curr_vol} -ref ${tmpdir}/${curr_vol} -o ${tmpdir}/mc_${curr_vol} -init ${outnm}.mat/${curr_vol} $flirt_fun_par -applyxfm $trans_fun_par
     fi
 
     mc_lst="$mc_lst ${tmpdir}/mc_${curr_vol}"

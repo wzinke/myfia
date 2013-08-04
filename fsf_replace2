@@ -41,7 +41,7 @@ cat << EOF
 
             ###########################################################
             ##   (c) wolf zinke (2009) - part of the MaFIA toolbox   ##
-            ##            Licensed under the MIT license             ##
+            ##            Released under the MIT license             ##
             ###########################################################
 
 EOF
