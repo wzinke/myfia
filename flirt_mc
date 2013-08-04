@@ -14,7 +14,7 @@ cat << EOF
             -ref        reference for coregistration (use a number or a file)
             -dof        degrees of freedom (default: 12 parameter affine transformation)
                         (numbers of transformation parameter, i.e. 3, 6, 7, 9 or 12)
-            -rot_tol    angle for all 3 axis that is used for the search (-rot_tol:rot_tol, default: 5)
+            -rot_tol    angle for all 3 axis that is used for the search (-rot_tol:rot_tol, default: 10)
             -cost       cost function (corratio,mutualinfo,normcorr,normmi,leastsq)
                         recommended: <corratio> for intra- and intermodal (default)
             -inmask     weighting mask for the input image, unless specified no weightning will be done
@@ -53,7 +53,7 @@ fi
 mask_thr=15
 outnm=${flnm}_mc
 dof=12
-rot_tol=3
+rot_tol=10
 do_refmask=0
 do_inmask=0
 do_init=0
@@ -196,7 +196,7 @@ then
         case $refmask in
             thr)    fslmaths $reffl -thrp $mask_thr $refweight
                     ;;
-            bet)    bet $reffl ${reffl}_bet -o -m -r 30 -f 0.4
+            bet)    bet $reffl ${reffl}_bet -o -m -r 30 -f 0.4 -R
                     if [ $robust_bet -eq 1 ]
                     then
                       CoM=`fslstats ${reffl}_bet_mask -C`
@@ -218,7 +218,7 @@ fi
 inweight=${tmpdir}/inmask
 flirt_fun_par=""
 
-flirt_fun_par="$flirt_fun_par -cost $costfun -searchcost $costfun"
+flirt_fun_par="$flirt_fun_par -usesqform -cost $costfun -searchcost $costfun"
 flirt_fun_par="$flirt_fun_par -searchrx -$rot_tol $rot_tol -searchry  -$rot_tol $rot_tol -searchrz  -$rot_tol $rot_tol"
 flirt_fun_par="$flirt_fun_par -dof $dof"
 
@@ -269,7 +269,7 @@ do
         case $inmask in
             thr)    fslmaths ${tmpdir}/${curr_vol} -thrp $mask_thr $inweight
                     ;;
-            bet)    bet ${tmpdir}/${curr_vol} ${tmpdir}/${curr_vol}_bet -o -m -r 30 -f 0.4
+            bet)    bet ${tmpdir}/${curr_vol} ${tmpdir}/${curr_vol}_bet -o -m -r 30 -f 0.4 -R
                     if [ $robust_bet -eq 1 ]
                     then
                       CoM=`fslstats ${tmpdir}/${curr_vol}_bet_mask -C`
@@ -289,7 +289,7 @@ do
 
     if [ $do_hdr -eq 1 ]
     then
-        flirt -in ${tmpdir}/${curr_vol} -ref $rsmpl_hdr -o ${tmpdir}/mc_${curr_vol} -init ${outnm}.mat/${curr_vol} $flirt_fun_par -applyxfm $trans_fun_par spline
+        flirt -in ${tmpdir}/${curr_vol} -ref $rsmpl_hdr -o ${tmpdir}/mc_${curr_vol} -init ${outnm}.mat/${curr_vol} $flirt_fun_par -applyxfm $trans_fun_par 
     else
         flirt -in ${tmpdir}/${curr_vol} -ref ${tmpdir}/${curr_vol} -o ${tmpdir}/mc_${curr_vol} -init ${outnm}.mat/${curr_vol} $flirt_fun_par -applyxfm $trans_fun_par
     fi
@@ -299,7 +299,7 @@ do
 
     if [ $do_init -eq 1 ]
     then
-        init_par="-init ${outnm}.mat/${curr_vol}"   # initialize fit with the previous transformation matrix
+        init_par="-init ${outnm}.mat/${curr_vol}"   # initialize with the previous transformation matrix
     fi
 done
 echo " - done"

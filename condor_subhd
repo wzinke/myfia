@@ -29,14 +29,19 @@ EOF
 exit 1
 
 }
- 
+
 if [ $# -lt 1 ]; then
     Usage
 else
     execut=$1;
     shift
 fi
- 
+
+if [ "X$(dirname $execut)" == "X" ]
+then
+    $execut=$(which $execut)
+fi
+
 #__________________________________________________________________________________________#
 inidir=`pwd`
 ncpu=1
@@ -57,7 +62,7 @@ do
                 shift 2
                 ;;
          -sd)   do_shim=1
-                shift 
+                shift
                 ;;
           -o)   ostr="> $2"
                 shift 2
@@ -72,7 +77,7 @@ do
 done
 
 #__________________________________________________________________________________________#
- 
+
 if [ $do_shim -eq 0 ]
 then
 
