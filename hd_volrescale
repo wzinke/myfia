@@ -23,7 +23,7 @@ cat << EOF
             ###########################################################
             ##   (c) wolf zinke (2011) - part of the MaFIA toolbox   ##
             ##         > MAcaque Functional Image Analysis <         ##
-            ##            Licensed under the MIT license             ##
+            ##            Released under the MIT license             ##
             ###########################################################
 
 EOF

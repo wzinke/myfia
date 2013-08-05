@@ -22,7 +22,7 @@ cat << EOF
             -refmask    weighting mask for the reference image, unless specified no weightning will be done
             -rob        use robust betting on each volume (time consuming!)
                         (use 'thr' or 'bet' as option, or specify a mask file)
-            -ip         interpolation (trilinear,nearestneighbour,sinc); default: trilinear
+            -ip         interpolation (trilinear,nearestneighbour,sinc,spline); default: trilinear
             -sm         use smoothing with fwhm given here prior coregistration
             -final      coregister mean image of motion corrected series
             -nIter      Number of iterations for coregistration (default: 1)
