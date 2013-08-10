@@ -20,17 +20,15 @@ cat << EOF
             -inmask     weighting mask for the input image, unless specified no weightning will be done
                         (use 'thr' or 'bet' as option)
             -refmask    weighting mask for the reference image, unless specified no weightning will be done
-            -rob        use robust betting on each volume (time consuming!)
-                        (use 'thr' or 'bet' as option, or specify a mask file)
             -ip         interpolation (trilinear,nearestneighbour,sinc,spline); default: trilinear
             -sm         use smoothing with fwhm given here prior coregistration
             -final      coregister mean image of motion corrected series
             -nIter      Number of iterations for coregistration (default: 1)
             -betpar     Parameter used for the bet call (default: "-r 30 -f 0.4")
-            -tmp        temporary directory where single 3D files are saved
-            -keep       don't delete temporary files when finished
             -resample   resamples volumes to the size of the reference image
             -rsmpl_hdr  resamples data to image size given by this header file (ignores -resample)
+            -tmp        temporary directory where single 3D files are saved
+            -keep       don't delete temporary files when finished
 
             ###########################################################
             ##   (c) wolf zinke (2009) - part of the MaFIA toolbox   ##
@@ -72,7 +70,6 @@ sincwd=5
 do_rsmpl=0
 sm_fwhm=0
 do_hdr=0
-robust_bet=0
 numiter=1
 betpar="-r 30 -f 0.4"
 searchtol="-nosearch"
@@ -117,9 +114,6 @@ do
                 ;;
          -sm)   sm_fwhm=$2
                 shift 2
-                ;;
-        -rob)   robust_bet=1
-                shift
                 ;;
       -final)   do_final=1
                 shift
@@ -228,6 +222,7 @@ if [ $do_refmask -eq 1 ]
 then
     flirt_fun_par="$flirt_fun_par -refweight $refweight"
 fi
+
 if [ $do_inmask -eq 1 ]
 then
     flirt_fun_par="$flirt_fun_par -inweight $inweight"
@@ -296,7 +291,7 @@ do
             init_par="-init ${tmpdir}/${outnm}_itr${preitr}.mat/${curr_vol}"
         fi
 
-        flirt -in ${tmpdir}/${curr_vol} -ref $Fref -omat ${tmpdir}/${outnm}_itr${i}.mat/${curr_vol} $flirt_fun_par $init_par -usesqform
+        flirt -in ${tmpdir}/${curr_vol} -ref $Fref -omat ${tmpdir}/${outnm}_itr${i}.mat/${curr_vol} $flirt_fun_par $init_par
 
         if [ $do_hdr -eq 1 ]
         then
