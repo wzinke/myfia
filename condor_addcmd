@@ -16,13 +16,12 @@ cat << EOF
     OPTIONS:
             -o      name of submit file (not working yet, use >> instead)
             -log    name stem of error and output files (process number will be appended)
-            -shim   add extra entries required if shim_dmctp is used (NIY!)
+            -shim   add extra entries required if shim_dmctp is used
 
 
             ###########################################################
             ##   (c) wolf zinke (2013) - part of the MaFIA toolbox   ##
             ##         > MAcaque Functional Image Analysis <         ##
-            ##   for comments and questions: wolfzinke@gmail.com     ##
             ##            Licensed under the MIT license             ##
             ###########################################################
 
@@ -31,9 +30,6 @@ EOF
 exit 1
 
 }
-
-# TODO: modify for shim_dmctp
-
 
 if [ $# -lt 1 ]; then
     Usage
@@ -45,6 +41,7 @@ fi
 #__________________________________________________________________________________________#
 ostr=""
 keeplog=0
+do_shim=0
 
 while [ $# -gt 0 ] ;
 do
@@ -55,6 +52,9 @@ do
         -log)   keeplog=1
                 lognm=$2
                 shift 2
+                ;;
+       -shim)   do_shim=1
+                shift
                 ;;
           -*)   echo "Wrong option: <$1>"
                 echo ""
@@ -67,13 +67,22 @@ done
 
 #__________________________________________________________________________________________#
 
-echo "arguments = \"$argstr \""  $ostr
-if [ $keeplog -eq 1 ]
+if [ $do_shim -eq 0 ]
 then
-    echo "error  = ${lognm}_\$(Process).e"   $ostr
-    echo "output = ${lognm}_\$(Process).o"   $ostr
-fi
-echo "Queue" $ostr
-echo ""      $ostr
+    echo "arguments = \"$argstr \""  $ostr
+    if [ $keeplog -eq 1 ]
+    then
+        echo "error  = ${lognm}_\$(Process).e"   $ostr
+        echo "output = ${lognm}_\$(Process).o"   $ostr
+    fi
+    echo "Queue" $ostr
+    echo ""      $ostr
+else
+    echo "arguments = \"\$(dmtcp_args) $argstr\"" $ostr
+    echo "environment = \$(dmtcp_env)" $ostr
 
+    echo "Queue" $ostr
+    echo "" $ostr
+
+fi
 

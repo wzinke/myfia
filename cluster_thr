@@ -65,6 +65,7 @@ fullout=0
 outstr=""
 do_neg=0
 neg=""
+bckfl="$FSLDIR/data/standard/MNI152_T1_2mm_brain"
 
 while [ $# -gt 0 ] ;
 do
@@ -101,9 +102,8 @@ do
          -pf)   prefix=$2
                 shift 2
                 ;;
-        -mat)   matCLstr="-x $2 --stdvol=$FSLDIR/data/standard/MNI152_T1_1mm_brain"
+        -mat)   #matCLstr="-x $2 --stdvol=$FSLDIR/data/standard/MNI152_T1_1mm_brain"
                 matstr="-mat $2"
-                bckfl="$FSLDIR/data/standard/MNI152_T1_2mm_brain"
                 shift 2
                 ;;
        -mask)   maskfl=`remove_ext $2`

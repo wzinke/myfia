@@ -15,6 +15,8 @@ cat << EOF
     As default, this script calls flameo to carry out a parametric t-test,
     however, with the -np option it is possible to use randomise instead.
 
+    # BUG: check fdr calculation
+
     OPTIONS:
             -o      name stem for the output data
             -B      use this data set as second sample
@@ -144,11 +146,10 @@ fi
 nA=`fslnvols $smplA`
 numPTS=$nA
 
-
 ##################################
 # identify constant voxel and mask them out
-fslmaths $tmpdir/testset -abs -Tmax $tmpdir/testset_allmax 
-fslmaths $tmpdir/testset -abs -Tmin $tmpdir/testset_allmin 
+fslmaths $tmpdir/testset -abs -Tmax  $tmpdir/testset_allmax
+fslmaths $tmpdir/testset -abs -Tmin  $tmpdir/testset_allmin
 fslmaths $tmpdir/testset_allmax -sub $tmpdir/testset_allmin -Tmax -bin $tmpdir/testset_mask -odt char
 
 if [ $get_mask -eq 1 ]
@@ -190,7 +191,8 @@ fi
 ### create design files
 
 ##################################
-if [ $do1smpl -eq 1 ]   # one sample t test
+# one sample t test
+if [ $do1smpl -eq 1 ]
 then
     # design.mat
     echo "/NumWaves 1"                   > $tmpdir/ttest.mat
@@ -215,7 +217,7 @@ then
     echo "/Matrix"                       >> $tmpdir/ttest.con
     echo "1"                             >> $tmpdir/ttest.con
 
-    # design.grp  
+    # design.grp
     echo "/NumWaves 1"        > $tmpdir/ttest.grp
     echo "NumPoints $numPTS" >> $tmpdir/ttest.grp
     echo ""                  >> $tmpdir/ttest.grp
@@ -228,7 +230,8 @@ then
     done
 
 ##################################
-elif [ $do_paired -eq 0 ] # unpaired two sample t test
+# unpaired two sample t test
+elif [ $do_paired -eq 0 ]
 then
     # code modified from FSL's design_ttest2 script
 # design.con
@@ -262,7 +265,7 @@ then
     done
     echo ""               >> $tmpdir/ttest.mat
 
-    # design.grp  
+    # design.grp
     echo "/NumWaves 1"        > $tmpdir/ttest.grp
     echo "NumPoints $numPTS" >> $tmpdir/ttest.grp
     echo ""                  >> $tmpdir/ttest.grp
@@ -275,7 +278,8 @@ then
     done
 
 ##################################
-elif [ $do1smpl -eq 2 ]    # paired two sample t test
+# paired two sample t test
+elif [ $do1smpl -eq 2 ]
 then
 # design.con
     echo '/ContrastName1   "A-B"'    > $tmpdir/ttest.con
@@ -354,7 +358,7 @@ then
     done
     echo ""                  >> $tmpdir/ttest.mat
 
-    # design.grp  
+    # design.grp
     echo "/NumWaves 1"        > $tmpdir/ttest.grp
     echo "NumPoints $numPTS" >> $tmpdir/ttest.grp
     echo ""                  >> $tmpdir/ttest.grp
@@ -365,7 +369,8 @@ then
 
 
 ##################################
-else  # tripled t test
+# tripled t test
+else
 # design.con
     echo '/ContrastName1   "A-B"'    > $tmpdir/ttest.con
     echo '/ContrastName2   "A-C"'    > $tmpdir/ttest.con
@@ -471,7 +476,7 @@ else  # tripled t test
     done
     echo ""                  >> $tmpdir/ttest.mat
 
-    # design.grp  
+    # design.grp
     echo "/NumWaves 1"        > $tmpdir/ttest.grp
     echo "NumPoints $numPTS" >> $tmpdir/ttest.grp
     echo ""                  >> $tmpdir/ttest.grp

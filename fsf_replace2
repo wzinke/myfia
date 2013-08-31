@@ -18,7 +18,8 @@ cat << EOF
                                       study name - XXstudyXX
                                     session date - XXdateXX
                                      scan number - XXscanXX
-                                      run number - XXrunXX  - as run0# if #<10
+                                      run number - XXRunXX  - as run_0# if #<10
+                                      run number - XXrunXX  - as run0#  if #<10
                                       run number - XXrnumXX - as run#
                                       run number - XXrrrXX  - as r#
 
@@ -170,8 +171,10 @@ do
 			case $chd in
 	  'Subj'| 'subject')    subj_pos=$pcnt
 							;;
-			  'session')    sess_pos=$pcnt
-							;;
+                'study')    study_pos=$pcnt
+                            ;;
+              'session')    sess_pos=$pcnt
+                            ;;
 			'sess_date')    date_pos=$pcnt
 							;;
 		         'scan')    scan_pos=$pcnt
@@ -192,13 +195,17 @@ do
                 $subj_pos ) cstem="${cstem}_$chd"
                             dateXchng=`echo "$dateXchng -e 's/XXsubjXX/$chd/g'"`
                             ;;
+               $study_pos ) cstem="${cstem}_$chd"
+                            dateXchng=`echo "$dateXchng -e 's/XXstudyXX/$chd/g'"`
+                            ;;
                 $sess_pos ) cstem="${cstem}_$chd"
                             dateXchng=`echo "$dateXchng -e 's/XXsessXX/$chd/g'"`
                             ;;
                 $date_pos ) cstem="${cstem}_$chd"
                             dateXchng=`echo "$dateXchng -e 's/XXdateXX/$chd/g'"`
                             ;;
-                $scan_pos ) cstem="${cstem}_scan_$chd"
+                $scan_pos ) chd=$(printf "%0*d\n" 2 $chd)
+                            cstem="${cstem}_scan_$chd"
                             dateXchng=`echo "$dateXchng -e 's/XXscanXX/scan_$chd/g'"`
                             ;;
                 $run_pos )  if [ $chd -eq $chd  2>/dev/null ]
@@ -206,11 +213,10 @@ do
                                 cstem="${cstem}_run$chd"
                                 dateXchng=`echo "$dateXchng -e 's/XXrrrXX/r$chd/g'"`
                                 dateXchng=`echo "$dateXchng -e 's/XXrnumXX/run$chd/g'"`
-                                if [ $chd -lt 10 ]
-                                then
-                                    chd=0$chd
-                                fi
+                                
+                                chd=$(printf "%0*d\n" 2 $chd)
                                 dateXchng=`echo "$dateXchng -e 's/XXrunXX/run$chd/g'"`
+                                dateXchng=`echo "$dateXchng -e 's/XXRunXX/run_$chd/g'"`
                             else
                                 cstem="${cstem}_$chd"
                                 dateXchng=`echo "$dateXchng -e 's/XXrunXX/$chd/g'"`

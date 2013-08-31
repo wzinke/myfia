@@ -150,7 +150,7 @@ done
 #__________________________________________________________________________________________#
 tmpdir=$(basename $outnm)
 tmpdir=$(echo $tmpdir | cut -d'.' -f1)
-tmpdir=`tmpnam $tmpdir`
+tmpdir=`tmpnam tmp_$tmpdir`
 rm $tmpdir
 mkdir $tmpdir
 
@@ -286,10 +286,6 @@ do
 
     fslmerge -t ${tmpdir}/TS_itr${i} $mc_lst
 
-#     fslmaths ${tmpdir}/TS_itr${i} -inm 1000 -thrP 5      -Tmean -mul $cnt ${tmpdir}/TS_itr${i}_sum
-#     fslmaths ${tmpdir}/TS_itr${i} -inm 1000 -thrP 5 -bin -Tmean -mul $cnt ${tmpdir}/TS_itr${i}_cnt
-#     fslmaths ${tmpdir}/TS_itr${i}_sum -div ${tmpdir}/TS_itr${i}_cnt ${tmpdir}/TS_itr${i}_mean
-
      fslmaths  ${tmpdir}/TS_itr${i} -inm 1000 -Tmean ${tmpdir}/TS_itr${i}_mean
 
     if [ $keep_tmp -eq 1 ]
@@ -298,10 +294,10 @@ do
     fi
 
     bet  ${tmpdir}/TS_itr${i}_mean ${tmpdir}/TS_itr${i}_mean_bet -o -m $betpar -R
-    immv ${tmpdir}/TS_itr${i}_mean_bet_mask $refweight
+    imcp ${tmpdir}/TS_itr${i}_mean_bet_mask $refweight
 
     Fref=${tmpdir}/TS_itr${i}_mean
-    
+
     rsmplvol="$Fref"
 done
 
@@ -324,7 +320,6 @@ then
     condor_subhd $(which flirt) > ${tmpdir}/final/coreg.submit
 
     cnt=0
-    mc2_lst=""
     for curr_mat in $mc_lst
     do
         convert_xfm -omat ${tmpdir}/final/vol_${cnt}.mat -concat $curr_mat ${tmpdir}/final/final_2.mat
@@ -336,8 +331,6 @@ then
         echo ""      >> ${tmpdir}/final/coreg.submit
 
         cnt=$(($cnt+1))
-
-        mc2_lst="$mc2_lst ${tmpdir}/final/vol_${cnt}"
     done
 
     condor_waitend "${tmpdir}/final/coreg.submit" $loc_flag

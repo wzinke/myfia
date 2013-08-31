@@ -21,7 +21,8 @@ cat << EOF
             -loc    run locally instead of using condor
             -lp     number of local processors used. This sets
                     also the -loc argument. (requires condor_waitend!)
-            -nx     do not submit processes, just create file
+            -sub    submit the files
+            -msg    get mail notification when job finishes
 
             ###########################################################
             ##   (c) wolf zinke (2013) - part of the MaFIA toolbox   ##
@@ -47,27 +48,33 @@ fi
 onm=allfsf.submit
 memusg=8000
 idir=`pwd`
-do_sub=1
+do_sub=0
 lp=4
 loc_flag=""
+do_loc=0
+msgstr="notification = Never"
 
 while [ $# -gt 0 ] ;
 do
     case $1 in
-          -o)    onm=$2
+          -o)   onm=$2
                 shift 2
                 ;;
-        -mem)    memusg=$2
+        -mem)   memusg=$2
                 shift 2
                 ;;
-       -idir)    idir=$2
+       -idir)   idir=$2
                 shift 2
                 ;;
-         -nx)    do_sub=0
+        -sub)   do_sub=1
                 shift
                 ;;
-         -lp)    loc_flag="-loc -nproc $2"
+         -lp)   loc_flag="-loc -nproc $2"
+                do_loc=1
                 shift 2
+                ;;
+        -msg)   msgstr=""
+                shift
                 ;;
           -*)   echo "Wrong option: <$1>"
                 echo ""
@@ -104,6 +111,7 @@ initialdir = $idir
 request_cpus = 1
 request_memory = $memusg
 getenv = True
+$msgstr
 " > $onm
 
 for cfsf in $fsflst
@@ -120,10 +128,16 @@ do
     echo "error  = $idir/log/$cstem.e\$(Process)" >> $onm
     echo "output = $idir/log/$cstem.o\$(Process)" >> $onm
     echo "Queue" >> $onm
+done
 
 if [ $do_sub -eq 1 ]
 then
-    condor_waitend $onm $loc_flag
+    if [ $do_loc -eq 1 ]
+    then
+        condor_waitend $onm $loc_flag -go
+    else
+        condor_submit $onm
+    fi
 fi
 
 
