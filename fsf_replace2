@@ -18,7 +18,8 @@ cat << EOF
                                       study name - XXstudyXX
                                     session date - XXdateXX
                                      scan number - XXscanXX
-                                      run number - XXrunXX  - as run0# if #<10
+                                      run number - XXRunXX  - as run_0# if #<10
+                                      run number - XXrunXX  - as run0#  if #<10
                                       run number - XXrnumXX - as run#
                                       run number - XXrrrXX  - as r#
 
@@ -211,6 +212,7 @@ do
                                     chd=0$chd
                                 fi
                                 dateXchng=`echo "$dateXchng -e 's/XXrunXX/run$chd/g'"`
+                                dateXchng=`echo "$dateXchng -e 's/XXRunXX/run_$chd/g'"`
                             else
                                 cstem="${cstem}_$chd"
                                 dateXchng=`echo "$dateXchng -e 's/XXrunXX/$chd/g'"`
