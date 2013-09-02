@@ -34,7 +34,7 @@ else
     infl=`remove_ext $1`
     reffl=`remove_ext $2`
     matfl=$3
-    imgfl=$4
+    imgfl=$(echo $4 | sed -e 's/.png//g')
     shift 4
 fi
 

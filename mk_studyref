@@ -1,0 +1,372 @@
+#!/bin/bash
+#
+# mk_studyref
+#
+# created: 06.08.2013
+# by zinke
+#
+
+Usage() {
+cat << EOF
+
+    Usage: $0 <fllst> [options]
+
+        Creates an average image from a list of nifti files.
+
+    OPTIONS:
+            -out        basename for the data output
+            -ref        reference for coregistration (use a zero-based number or a file)
+            -dof        degrees of freedom (default: 12 parameter affine transformation)
+                        (numbers of transformation parameter, i.e. 3, 6, 7, 9 or 12)
+            -rot_tol    angle for all 3 axis that is used for the search
+                        (-rot_tol:rot_tol, default: 10)
+            -cost       cost function (corratio,mutualinfo,normcorr,normmi,leastsq)
+                        (default: normcorr)
+            -refmask    weighting mask for the reference image,
+                        unless specified no weightning will be done
+            -ip         interpolation (trilinear,nearestneighbour,sinc,spline)
+                        default: spline
+            -sm         use smoothing with fwhm given here prior coregistration
+            -nIter      Number of iterations for coregistration (default: 2)
+            -betpar     Parameter used for the bet call (default: "-r 30 -f 0.4")
+            -thr        Apply intensity threshold on each volume
+            -ext        output the extracted brain only.
+            -iso        resample to the specified voxel size
+            -crop       reduce image size to the cubus that actual contains data
+            -nproc      run local with n processes
+            -keep       don't delete temporary files when finished
+
+            ###########################################################
+            ##   (c) wolf zinke (2013) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+EOF
+exit 1
+
+}
+# TODO: Make bet/mask options for reference more flexible
+# TODO: Apply smmothing only to the volumes used for coregistrtion but not for averagging
+# BUG:  ? Using a extra reference gives weired results - error or general problem?
+
+if [ $# -lt 1 ]; then
+    Usage
+else
+    fllst=$1;
+    shift
+fi
+
+#__________________________________________________________________________________________#
+
+outnm=$(remove_ext ${fllst})_avrg
+mask_thr=15
+get_refmask=1
+dof=12
+ref=0
+rot_tol=6
+ip="spline"
+costfun="normcorr"
+betpar="-r 30 -f 0.35"
+searchtol="-nosearch"
+sm_fwhm=0
+numiter=2
+keep_tmp=0
+loc_flag=""
+got_ref=0
+thrstr=""
+smstr=''
+final_bet=0
+do_rsmpl=0
+do_crop=0
+
+#__________________________________________________________________________________________#
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+        -out)   outnm=$(remove_ext $2)
+                shift 2
+                ;;
+        -dof)   dof=$2
+                shift 2
+                ;;
+        -ref)   ref=$2
+                if [ -e "$ref" ]
+                then
+                    got_ref=1
+                fi
+                shift 2
+                ;;
+    -refmask)   refmask=$2
+                get_refmask=0
+                shift 2
+                ;;
+       -cost)   costfun=$2
+                shift 2
+                ;;
+    -rot_tol)   searchtol="-searchrx -$2 $2 -searchry  -$2 $2 -searchrz  -$2 $2"
+                shift 2
+                ;;
+         -ip)   ip=$2
+                shift 2
+                ;;
+         -sm)   smstr="-s $(fwhm2sigma $2)"
+                shift 2
+                ;;
+      -nIter)   numiter=$2
+                shift 2
+                ;;
+        -thr)   thrstr="-thrp $2"
+                shift 2
+                ;;
+     -betpar)   betpar="$2"
+                shift 2
+                ;;
+        -ext)   final_bet=1
+                shift
+                ;;
+       -crop)   do_crop=1
+                shift
+                ;;
+        -iso)   do_rsmpl=1
+                isoscl=$2
+                shift 2
+                ;;
+      -nproc)   loc_flag="-loc -nproc $2"
+                shift 2
+                ;;
+       -keep)   keep_tmp=1
+                shift
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+#__________________________________________________________________________________________#
+tmpdir=$(basename $outnm)
+tmpdir=$(echo $tmpdir | cut -d'.' -f1)
+tmpdir=`tmpnam tmp_$tmpdir`
+rm $tmpdir
+mkdir $tmpdir
+
+if [ $(imtest $fllst) -eq 1 ]
+then
+    mkdir $tmpdir/invols
+    fslsplit $fllst $tmpdir/invols/vol_ -t
+
+    vol_lst=$(ls -1 $tmpdir/invols/*.nii.gz)
+else
+    vol_lst=$(cat $fllst)
+fi
+
+mkdir $tmpdir/vols
+
+#__________________________________________________________________________________________#
+# prepare all volumes for processing
+
+volfls=""
+maskfls=""
+cnt=0
+echo ""
+echo "prepare volumes for processing:"
+
+condor_subhd $(which fslmaths) > $tmpdir/vols/fslm.submit
+condor_subhd $(which bet)      > $tmpdir/vols/bet.submit
+
+for curr_vol in $vol_lst
+do
+    echo "arguments = \"${curr_vol} $smstr -nan $thrstr $tmpdir/vols/vol_${cnt}\"" >> $tmpdir/vols/fslm.submit
+    echo "error  = $tmpdir/vols/cvol_${cnt}_fslm_\$(Process).e" >> $tmpdir/vols/fslm.submit
+    echo "output = $tmpdir/vols/cvol_${cnt}_fslm_\$(Process).o" >> $tmpdir/vols/fslm.submit
+    echo "Queue" >> $tmpdir/vols/fslm.submit
+    echo ""      >> $tmpdir/vols/fslm.submit
+
+    echo "arguments = \"$tmpdir/vols/vol_${cnt} $tmpdir/vols/vol_${cnt}_bet -o -m $betpar -R\"" >> $tmpdir/vols/bet.submit
+    echo "error  = $tmpdir/vols/cvol_${cnt}_bet_\$(Process).e" >> $tmpdir/vols/bet.submit
+    echo "output = $tmpdir/vols/cvol_${cnt}_bet_\$(Process).o" >> $tmpdir/vols/bet.submit
+    echo "Queue" >> $tmpdir/vols/bet.submit
+    echo ""      >> $tmpdir/vols/bet.submit
+
+    volfls="$volfls   $tmpdir/vols/vol_${cnt}"
+
+    if [ "$cnt" == "$ref" ]  # if reference image is a volume of the file list
+    then
+        ref="$tmpdir/vols/vol_${cnt}"
+        refmask="$tmpdir/vols/vol_${cnt}_bet_mask"
+        get_refmask=0
+    fi
+
+    cnt=$(($cnt+1))
+done
+
+condor_waitend "$tmpdir/vols/fslm.submit $tmpdir/vols/bet.submit" $loc_flag
+
+#__________________________________________________________________________________________#
+# get the reference image
+reffl=${tmpdir}/ref
+refweight=${tmpdir}/refmask
+
+imcp $ref $reffl   # copy reference into temp directory
+
+# weightning mask
+if [ $get_refmask -eq 1 ]
+then
+    bet $reffl ${reffl}_bet -o -m $betpar -R
+    immv ${reffl}_bet_mask $refweight
+else
+    imcp $refmask $refweight
+fi
+
+#__________________________________________________________________________________________#
+# rescale data
+
+if [ $do_rsmpl -eq 1 ]
+then
+    hd_volrescale $reffl -i $isoscl -o ${tmpdir}/rsmplHD
+    rsmplvol="${tmpdir}/rsmplHD"
+else
+    rsmplvol="$reffl"
+fi
+
+#__________________________________________________________________________________________#
+# run flirt on each volume
+
+Fref=$reffl
+
+for i in $(seq $numiter)
+do
+    echo ""
+    echo "run iteration $i"
+    Csbmt_fl=${tmpdir}/Coreg_itr${i}.submit
+    Tsbmt_fl=${tmpdir}/Trans_itr${i}.submit
+
+    condor_subhd $(which flirt) > $Csbmt_fl
+    condor_subhd $(which flirt) > $Tsbmt_fl
+
+    mkdir ${tmpdir}/itr${i}.mat
+    mkdir ${tmpdir}/cvol_itr${i}
+
+    mc_lst=""
+    matlst=""
+    cnt=0
+    for curr_vol in $volfls
+    do
+        if [ $i -eq 1 ]
+        then
+            init_par=" -usesqform $searchtol "
+        else
+            preitr=$(($i-1))
+            init_par="-usesqform -init ${tmpdir}/itr${preitr}.mat/cvol_${cnt} $searchtol" #-nosearch"
+        fi
+
+        echo "arguments = \"-in ${curr_vol} -ref $Fref -omat ${tmpdir}/itr${i}.mat/cvol_${cnt}  $init_par -cost $costfun -searchcost $costfun -dof $dof -refweight $refweight -inweight ${curr_vol}_bet_mask -interp $ip $sclstr\"" >> $Csbmt_fl
+        echo "error  = ${tmpdir}/cvol_itr${i}/cvol_${cnt}_\$(Process).e" >> $Csbmt_fl
+        echo "output = ${tmpdir}/cvol_itr${i}/cvol_${cnt}_\$(Process).o" >> $Csbmt_fl
+        echo "Queue" >> $Csbmt_fl
+        echo ""      >> $Csbmt_fl
+
+        echo "arguments = \"-in ${curr_vol} -ref $rsmplvol -o ${tmpdir}/cvol_itr${i}/cvol_${cnt} -init ${tmpdir}/itr${i}.mat/cvol_${cnt} -interp $ip -applyxfm\"" >> $Tsbmt_fl
+        echo "error  = ${tmpdir}/cvol_itr${i}/cvolT_${cnt}_${cnt}_\$(Process).e" >> $Tsbmt_fl
+        echo "output = ${tmpdir}/cvol_itr${i}/cvolT_${cnt}_${cnt}_\$(Process).o" >> $Tsbmt_fl
+        echo "Queue" >> $Tsbmt_fl
+        echo ""      >> $Tsbmt_fl
+
+        mc_lst="$mc_lst ${tmpdir}/cvol_itr${i}/cvol_${cnt}"
+        matlst="$matlst ${tmpdir}/itr${i}.mat/cvol_${cnt}"
+
+        cnt=$(($cnt+1))
+    done
+
+    condor_waitend "$Csbmt_fl $Tsbmt_fl" $loc_flag
+
+    fslmerge -t ${tmpdir}/TS_itr${i} $mc_lst
+
+     fslmaths  ${tmpdir}/TS_itr${i} -inm 1000 -Tmean ${tmpdir}/TS_itr${i}_mean
+
+    if [ $keep_tmp -eq 1 ]
+    then
+        fslmaths  ${tmpdir}/TS_itr${i} -inm 1000 -Tstd ${tmpdir}/TS_itr${i}_std
+    fi
+
+    bet  ${tmpdir}/TS_itr${i}_mean ${tmpdir}/TS_itr${i}_mean_bet -o -m $betpar -R
+    imcp ${tmpdir}/TS_itr${i}_mean_bet_mask $refweight
+
+    Fref=${tmpdir}/TS_itr${i}_mean
+
+    rsmplvol="$Fref"
+done
+
+minval=$(fslstats ${tmpdir}/TS_itr${i}_mean -k ${tmpdir}/TS_itr${i}_mean_bet_mask  -P 10)
+fslmaths ${tmpdir}/TS_itr${i}_mean -sub $minval -thr 0 ${tmpdir}/TS_itr${i}_mean_tmp
+immv ${tmpdir}/TS_itr${i}_mean_tmp ${tmpdir}/TS_itr${i}_mean
+
+#__________________________________________________________________________________________#
+#
+if [ $got_ref -eq 1 ]
+then
+    echo ""
+    echo "final co-registration to reference."
+    mkdir ${tmpdir}/final
+
+    flirt -in ${tmpdir}/TS_itr${i}_mean -ref $reffl -omat ${tmpdir}/final/final_1.mat $searchtol -dof $dof -refweight $refmask
+
+    flirt -in ${tmpdir}/TS_itr${i}_mean -ref $reffl -omat ${tmpdir}/final/final_2.mat $searchtol -dof $dof -refweight $refmask  -init ${tmpdir}/final/final_mean.mat
+
+    condor_subhd $(which flirt) > ${tmpdir}/final/coreg.submit
+
+    cnt=0
+    for curr_mat in $mc_lst
+    do
+        convert_xfm -omat ${tmpdir}/final/vol_${cnt}.mat -concat $curr_mat ${tmpdir}/final/final_2.mat
+
+        echo "arguments = \"-in $tmpdir/$cvol -ref ${tmpdir}/final_mean -o ${tmpdir}/final/vol_${cnt} -init ${tmpdir}/final/vol_${cnt}.mat $flirt_fun_par -applyxfm\"" >> ${tmpdir}/final/coreg.submit
+        echo "error  = ${tmpdir}/final/cvol_${cnt}_\$(Process).e" >> ${tmpdir}/final/coreg.submit
+        echo "output = ${tmpdir}/final/cvol_${cnt}_\$(Process).o" >> ${tmpdir}/final/coreg.submit
+        echo "Queue" >> ${tmpdir}/final/coreg.submit
+        echo ""      >> ${tmpdir}/final/coreg.submit
+
+        cnt=$(($cnt+1))
+    done
+
+    condor_waitend "${tmpdir}/final/coreg.submit" $loc_flag
+
+    fslmerge -t ${tmpdir}/TS_itr${i} $mc_lst
+
+    fslmaths  ${tmpdir}/TS_itr${i} -inm -Tmean ${tmpdir}/final/meanimg
+
+    chkreg ${tmpdir}/TS_itr${i}_mean $reffl ${tmpdir}/final/final_2.mat ${outnm}2ref.png
+
+    if [ $final_bet -eq 1 ]
+    then
+        bet  $outnm $outnm -o -m $betpar -R
+    else
+        last_head=${tmpdir}/final/meanimg
+    fi
+else
+    if [ $final_bet -eq 1 ]
+    then
+        imcp ${tmpdir}/TS_itr${i}_mean_bet $outnm
+    else
+        imcp ${tmpdir}/TS_itr${i}_mean $outnm
+    fi
+    last_head=${tmpdir}/TS_itr${i}_mean
+fi
+
+if [ $do_crop -eq 1 ]
+then
+    echo "Cropping volume"
+    roivol=$(fslstats $last_head -w)
+    fslroi $outnm $outnm $roivol
+fi
+
+
+#__________________________________________________________________________________________#
+if [ $keep_tmp -eq 0 ]
+then
+    rm -r $tmpdir
+fi

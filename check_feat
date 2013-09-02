@@ -46,7 +46,6 @@ done
 
 feat_dirs=$(find -type d -name '*.feat' | grep -v gfeat)
 
-
 cnt=0
 correct_done=0
 failed=0

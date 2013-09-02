@@ -55,6 +55,7 @@ do
                 shift
                 ;;
       -nproc)   nproc=$2
+                runloc=1
                 shift 2
                 ;;
           -*)   echo "Wrong option: <$1>"

@@ -68,7 +68,7 @@ text2png(){
 }
 
 #----------------------------------------------------------------------#
-outnm="${bg_img}_sliceselection.png"
+outnm="${bg_img}_selslc.png"
 # smint="3 10"
 
 minpxl=5

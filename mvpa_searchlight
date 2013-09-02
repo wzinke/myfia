@@ -20,7 +20,7 @@ parser = argparse.ArgumentParser(description='Run searchlight analysis on a data
 parser.add_argument('ds',  help='data set')
 parser.add_argument('-attr',  required=True, help='attribute file')
 parser.add_argument('-mask',  default=None, help='mask file')
-parser.add_argument('-nz',    action='store_false', default=True)
+parser.add_argument('-nz',    action='store_false', default=True, help='No z-scoring of the data set')
 parser.add_argument('-cnd',   help='targets for subset', action='append', default=[])
 parser.add_argument('-clf',   default="smlr", help='Classier (knn, svm, nusvm, smlr)')
 parser.add_argument('-rad',   default=3, type=int, help='radius of the searchlight sphere')
@@ -28,7 +28,7 @@ parser.add_argument('-ts',    default=2, type=int, help='number of runs used as 
 parser.add_argument('-nproc', dest='NumProc', default=1, type=int, help='Number of parallel processes')
 parser.add_argument('-odir',  default=os.getcwd(), help='output directory')
 parser.add_argument('-onm',   default="MVPA_SL",   help='output file name')
-parser.add_argument('-hdf',   action='store_false', default=True, help='Save all processing steps also as hdf5 file')
+parser.add_argument('-hdf',   action='store_false', default=True, help='Save all processing steps also as hdf5 file (NIY!)')
 
 cla = parser.parse_args()
 
@@ -46,9 +46,6 @@ from mvpa2.misc.io              import SampleAttributes
 from mvpa2.datasets.mri         import fmri_dataset
 from mvpa2.mappers.zscore       import zscore
 from mvpa2.mappers.fx           import mean_sample
-from mvpa2.clfs.smlr            import SMLR
-from mvpa2.clfs.svm             import LinearNuSVMC, LinearCSVMC
-from mvpa2.clfs.knn             import kNN
 from mvpa2.misc.plot.base       import plot_samples_distance
 
 #########################################################################
@@ -72,12 +69,16 @@ else:
 
 # specify the classifier
 if cla.clf == "knn":
+    from mvpa2.clfs.knn  import kNN
     clf  = kNN()
 elif cla.clf == "svm":
-     clf  = LinearCSVMC()
+    from mvpa2.clfs.svm  import LinearCSVMC
+    clf  = LinearCSVMC()
 elif cla.clf == "nusvm":
+    from mvpa2.clfs.svm  import LinearNuSVMC
     clf  = LinearNuSVMC()
 elif cla.clf == "smlr":
+    from mvpa2.clfs.smlr import SMLR
     clf  = SMLR()
 
 # method to splitt data into training and test sets

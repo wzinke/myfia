@@ -15,6 +15,7 @@ cat << EOF
             -cpu    number of demanded CPUs (default: 1)
             -mem    required memory usage (default: 2000)
             -ini    initial directory (default: pwd)
+            -msg    send message when job is completed
             -o      filename of the submit file
             -sd     use shim_dmtcp for long lasting jobs
 
@@ -48,6 +49,7 @@ ncpu=1
 memuse=2000
 ostr=""
 do_shim=0
+msgstr="notification = Never"
 
 while [ $# -gt 0 ] ;
 do
@@ -60,6 +62,9 @@ do
                 ;;
         -ini)   inidir=$2
                 shift 2
+                ;;
+        -msg)   msgstr=""
+                shift
                 ;;
          -sd)   do_shim=1
                 shift
@@ -87,7 +92,7 @@ initialdir = $inidir
 request_cpus = $ncpu
 request_memory = $memuse
 getenv = True
-notification = Never
+$msgstr
 " $ostr
 
 else
@@ -105,7 +110,7 @@ dmtcp_env = DMTCP_TMPDIR=./;JALIB_STDERR_PATH=/dev/null;DMTCP_PREFIX_ID=\$(CLUST
 initialdir = $inidir
 request_cpus = $ncpu
 request_memory = $memuse
-getenv = True
+$msgstr
 " $ostr
 
 fi

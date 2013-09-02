@@ -32,6 +32,8 @@ EOF
 exit 1
 }
 
+# TODO: run volume wise normalization in parallel (extra executable routine?).
+
 if [ $# -lt 1 ]; then
     Usage
 else
