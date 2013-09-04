@@ -243,10 +243,10 @@ fslmeants -i ${featdir}/filtered_func_data  -m $fodir/roi -o $fodir/roi_ts.txt
 roivxl=$(fslstats $fodir/roi -V | awk '{print $1}')
 
 #__________________________________________________________________________________________#
-echo -n "$prehd copenum copename voxels volume" > $fodir/roi_tbl.dat
-echo -n "C_mean C_std C_min C_max C_10% C_median C_90% C_max_x C_max_y C_max_z" >> $fodir/roi_tbl.dat
-echo -n "P_mean P_std P_min P_max P_10% P_median P_90% P_max_x P_max_y P_max_z" >> $fodir/roi_tbl.dat
-echo    "Z_mean Z_std Z_min Z_max Z_10% Z_median Z_90% Z_max_x Z_max_y Z_max_z" >> $fodir/roi_tbl.dat
+echo -n "$prehd  copenum  copename  voxels  volume" > $fodir/roi_tbl.dat
+echo -n "  C_mean  C_std  C_min  C_max  C_10  C_median  C_90  C_max_x  C_max_y  C_max_z" >> $fodir/roi_tbl.dat
+echo -n "  P_mean  P_std  P_min  P_max  P_10  P_median  P_90  P_max_x  P_max_y  P_max_z" >> $fodir/roi_tbl.dat
+echo    "  Z_mean  Z_std  Z_min  Z_max  Z_10  Z_median  Z_90  Z_max_x  Z_max_y  Z_max_z" >> $fodir/roi_tbl.dat
 
 
 for ccope in $copelst
@@ -289,7 +289,7 @@ do
     declare -a ycoor=($(cat $tmpdir/zstat${ccope}_all.dat  | awk '{print $2}'))
     declare -a zcoor=($(cat $tmpdir/zstat${ccope}_all.dat  | awk '{print $3}'))
 
-    echo "$prehd zstat cope pe func_X func_X func_X $mnistr" > $fodir/cope${ccope}_vxl_tbl.dat
+    echo "$prehd zstat cope pe func_X func_Y func_Z $mnistr" > $fodir/cope${ccope}_vxl_tbl.dat
     mnicoor=""
     for cvxl in $(seq $numvxl)
     do
@@ -311,9 +311,9 @@ do
     cstats=$(fslstats ${featdir}/stats/cope${ccope} -k $cmask -v -m -s -R -p 10 -p 50 -p 90 -x)
 
     echo -n "$prestr $ccope $cnm" >> $fodir/roi_tbl.dat
-    echo -n "$(fslstats ${featdir}/stats/cope${ccope}  -k $cmask -v -m -s -R -p 10 -p 50 -p 90 -x)" >> $fodir/roi_tbl.dat
-    echo -n "$(fslstats ${featdir}/stats/pe${ccope}    -k $cmask -v -m -s -R -p 10 -p 50 -p 90 -x)" >> $fodir/roi_tbl.dat
-    echo    "$(fslstats ${featdir}/stats/zstat${ccope} -k $cmask -v -m -s -R -p 10 -p 50 -p 90 -x)" >> $fodir/roi_tbl.dat
+    echo -n "  $(fslstats ${featdir}/stats/cope${ccope}  -k $cmask -v -m -s -R -p 10 -p 50 -p 90 -x)" >> $fodir/roi_tbl.dat
+    echo -n "  $(fslstats ${featdir}/stats/pe${ccope}    -k $cmask -v -m -s -R -p 10 -p 50 -p 90 -x)" >> $fodir/roi_tbl.dat
+    echo    "  $(fslstats ${featdir}/stats/zstat${ccope} -k $cmask -v -m -s -R -p 10 -p 50 -p 90 -x)" >> $fodir/roi_tbl.dat
 
 done
 
