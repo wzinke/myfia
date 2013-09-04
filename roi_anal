@@ -1,0 +1,357 @@
+#!/bin/bash
+#
+# roi_anal
+#
+# created: 02.09.2013
+# by zinke
+#
+
+Usage() {
+cat << EOF
+
+    Usage: $0 <featdir> <roi> <copelist> [options]
+
+        extract statistical values of specified cope files for a defined ROI
+        <copelist> is a list of numbers identifying the copes (e.g. "4 5 8 9")
+
+    OPTIONS:
+            -odir    <basename>   output directory (default: roi name)
+            -dirpath <dirname>    root output directory (default: $featdir)
+            -thr     <thr>        use only voxel above this absolute threshold
+            -thrP    <thr%>       use only voxel above this relative threshold
+            -perc                 convert to percent signal change (whatever this is, NIY!)
+            -mat     <matfl>      use this transformation matrix\warpfield
+            -imat    <matfl>      Invert this transformation matrix\warpfield
+            -bck     <bckimg>     background image for ROI
+            -mni                  ROI is defined in MNI space
+            -pfx <pfxhd> <pfxln>  print this string prior the roi statistics
+            -keep                 don't delete temporary files when finished
+
+    does not allow for roi weighting in the current form
+
+            ###########################################################
+            ##   (c) wolf zinke (2013) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+EOF
+exit 1
+
+}
+
+# TODO: implement percent transformation
+# TODO: add ts_plot
+# TODO: option to use premat with warp field
+
+if [ $# -lt 3 ]; then
+    Usage
+else
+    featdir="$(dirname $(realpath $1))/$(basename $(realpath $1))"
+    roi=$2
+    copelst="$3"
+    shift 3
+fi
+
+if [ ! -e ${featdir} ]
+then
+    echo "ERROR: Feat direct does not exist!"
+    echo "       ${featdir}"
+    exit 0
+elif [ $(imtest ${featdir}/example_func) -ne 1 ]
+then
+    echo "ERROR: Something wrong here, example_func not found!"
+    echo "       ${featdir}/example_func"
+    exit 0
+fi
+
+if [ $(imtest $roi) -ne 1 ]
+then
+    echo "ERROR: ROI mask not found!"
+    echo "       $roi"
+    exit 0
+fi
+
+#__________________________________________________________________________________________#
+chkthr() {
+    if [ $1 -eq 1 ]
+    then
+        echo "Only one threshold option can be used, all subsequent uses are ignored!"
+        return 0
+    else
+        return 1
+    fi
+}
+
+tmpdir=`tmpnam tmp_roianal`
+rm $tmpdir
+mkdir $tmpdir
+
+roinm=$(remove_ext $roi)
+roinm=$(basename $roinm)
+
+odir=$roinm
+dirpath=${featdir}
+
+got_thr=0
+do_perc=0
+do_back=0
+do_mni=0
+get_mat=1
+do_inv=0
+thropt="0"
+thrval=0
+keep_tmp=0
+
+prestr=""
+prehd=""
+mnistr=""
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+       -odir)   odir=$2
+                shift 2
+                ;;
+    -dirpath)   dirpath=$2
+                shift 2
+                ;;
+        -thr)   if [ $got_thr -eq 1 ]
+                then
+                    echo "Only one threshold option can be used, all subsequent uses are ignored!"
+                    return 0
+                else
+                    got_thr=1
+                    thropt="a"
+                    thrval=$2
+                fi
+                shift 2
+                ;;
+       -thrP)   if [ $got_thr -eq 1 ]
+                then
+                    echo "Only one threshold option can be used, all subsequent uses are ignored!"
+                    return 0
+                else
+                    got_thr=1
+                    thropt="p"
+                    thrval=$2
+                fi
+                shift 2
+                ;;
+         -mat)  get_mat=0
+                matfl=$2
+                shift 2
+                ;;
+        -imat)  get_mat=0
+                do_inv=1
+                matfl=$2
+                shift 2
+                ;;
+         -bck)  do_back=1
+                bckimg=$2
+                shift 2
+                ;;
+         -mni)  if [ $do_back -eq 0 ]
+                then
+                    bckimg=$FSLDIR/data/standard/MNI152_T1_2mm_brain
+                fi
+                do_back=1
+                do_mni=1
+                mnistr="MNI_X MNI_X MNI_X"
+                shift
+                ;;
+        -perc)  do_perc=1
+                echo "WARNING: scaling to PSC not implemented yet, option ignored!"
+                shift
+                ;;
+        -pfx)   prestr="$2"
+                prehd="$3"
+                shift 3
+                ;;
+        -keep)  keep_tmp=1
+                echo "tmp dir: $tmpdir"
+                shift
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+fodir=$dirpath/$odir
+
+mkdir -p $fodir
+
+#__________________________________________________________________________________________#
+# roi transform
+
+# get the transformation
+if [ $get_mat -eq 1 ]
+then
+    if [ $(imtest ${featdir}/reg/standard2example_func_warp) -eq 1 ]
+    then
+        matfl=${featdir}/reg/standard2example_func_warp
+    elif [ $(imtest ${featdir}/reg/example_func2standard_warp) -eq 1 ]
+    then
+        invwarp -w ${featdir}/reg/example_func2standard_warp -o ${featdir}/reg/standard2example_func_warp -r ${featdir}/reg/example_func
+        matfl=${featdir}/reg/standard2example_func_warp
+    elif [ -e ${featdir}/reg/standard2example_func.mat ]
+    then
+        matfl=${featdir}/reg/standard2example_func.mat
+    else
+        echo "ERROR: No transformation to standard found in this directory!"
+        echo "       ${featdir}/reg"
+        exit 0
+    fi
+elif [ $do_inv -eq 1 ]
+then
+    if [ $(imtest $matfl) -eq 1 ]
+    then
+        invwarp -w $matfl -o $tmpdir/matfl -r ${featdir}/example_func
+    else
+        convert_xfm -omat $tmpdir/matfl -inverse $matfl
+    fi
+    matfl=$tmpdir/matfl
+fi
+
+# transform roi mask into native space
+if [ $(imtest $matfl) -eq 1 ]
+then
+    applywarp --ref=${featdir}/example_func --in=$roi --out=$fodir/roi --warp=$matfl
+    invwarp -w $matfl -o $tmpdir/invmat -r $roi
+
+else
+    flirt -in $roi -ref ${featdir}/example_func -out $fodir/roi -applyxfm -init $matfl
+    convert_xfm -omat $tmpdir/invmat -inverse $matfl
+fi
+imatfl=$tmpdir/invmat
+
+fslmaths $fodir/roi -thr 0.5 $fodir/roi -odt char # this threshold assumes an interpolation of a binary mask
+
+vol_slicer ${featdir}/example_func -stat $fodir/roi -thick -s 2 -cog -statrng 0.5 4 -out $fodir/roi.png
+if [ $do_back -eq 1 ]
+then
+    vol_slicer $bckimg -stat $roi -thick -s 2 -cog -statrng 0.5 4 -out $fodir/roi_hr.png
+    chkreg ${featdir}/example_func $bckimg $imatfl  $fodir/reg_check.png
+fi
+
+fslmeants -i ${featdir}/filtered_func_data  -m $fodir/roi -o $fodir/roi_ts.txt
+
+roivxl=$(fslstats $fodir/roi -V | awk '{print $1}')
+
+#__________________________________________________________________________________________#
+echo -n "$prehd copenum copename voxels volume" > $fodir/roi_tbl.dat
+echo -n "C_mean C_std C_min C_max C_10% C_median C_90% C_max_x C_max_y C_max_z" >> $fodir/roi_tbl.dat
+echo -n "P_mean P_std P_min P_max P_10% P_median P_90% P_max_x P_max_y P_max_z" >> $fodir/roi_tbl.dat
+echo    "Z_mean Z_std Z_min Z_max Z_10% Z_median Z_90% Z_max_x Z_max_y Z_max_z" >> $fodir/roi_tbl.dat
+
+
+for ccope in $copelst
+do
+    cnm=$(cat ${featdir}/design.con | grep /ContrastName$ccope | head -1 | cut -f2 | sed -e 's/^ *//g' -e 's/ *$//g' -e 's/[ ]/_/g' -e 's/:/_/g')
+
+    # get cope name for output table
+    thrstr=""
+    if [ $thropt == "0" ]
+    then
+        cmask="$fodir/roi"
+    else
+        case $thropt in
+            "a")  cthr=$thrval
+                  ;;
+            "p")  cthr=$(fslstats ${featdir}/stats/zstat${ccope} -k $fodir/roi -P $thrval)
+                  ;;
+        esac
+        fslmaths ${featdir}/stats/zstat${ccope} -mas $fodir/roi -thr $cthr -bin $fodir/cope${ccope}_mask -odt char
+        cmask="$fodir/cope${ccope}_mask"
+
+        vol_slicer ${featdir}/example_func -stat $cmask -thick -s 2 -cog -statrng 0.5 4 -out $fodir/roi_cope${ccope}.png
+        if [ $do_back -eq 1 ]
+        then
+            vol_slicer $bckimg -stat $cmask -thick -s 2 -cog -statrng 0.5 4 -out $fodir/roi_cope${ccope}_hr.png -mat $imatfl
+        fi
+    fi
+
+    numvxl=$(fslstats $cmask -V | awk '{print $1}')
+#     num10perc=$(echo "0.9*$numvxl" | bc -l | xargs printf "%1.0f")
+
+    fslmeants -i ${featdir}/stats/cope${ccope}  -m $cmask --showall --transpose  -o $tmpdir/cope${ccope}_all.dat
+    fslmeants -i ${featdir}/stats/zstat${ccope} -m $cmask --showall --transpose  -o $tmpdir/zstat${ccope}_all.dat
+    fslmeants -i ${featdir}/stats/pe${ccope}    -m $cmask --showall --transpose  -o $tmpdir/pe${ccope}_all.dat
+
+    declare -a cvals=($(cat $tmpdir/cope${ccope}_all.dat   | awk '{print $4}'))
+    declare -a pvals=($(cat $tmpdir/pe${ccope}_all.dat     | awk '{print $4}'))
+    declare -a zvals=($(cat $tmpdir/zstat${ccope}_all.dat  | awk '{print $4}'))
+    declare -a xcoor=($(cat $tmpdir/zstat${ccope}_all.dat  | awk '{print $1}'))
+    declare -a ycoor=($(cat $tmpdir/zstat${ccope}_all.dat  | awk '{print $2}'))
+    declare -a zcoor=($(cat $tmpdir/zstat${ccope}_all.dat  | awk '{print $3}'))
+
+    echo "$prehd zstat cope pe func_X func_X func_X $mnistr" > $fodir/cope${ccope}_vxl_tbl.dat
+    mnicoor=""
+    for cvxl in $(seq $numvxl)
+    do
+        if [ $do_mni -eq 1 ]
+        then
+            if [ $(imtest $imatfl) -eq 1 ]
+            then
+                mnicoor="$(echo "${xcoor[$cvxl]} ${ycoor[$cvxl]} ${zcoor[$cvxl]}" | img2stdcoord -img ${featdir}/example_func -std $bckimg -warp $imatfl -vox -)"
+            else
+                mnicoor="$(echo "${xcoor[$cvxl]} ${ycoor[$cvxl]} ${zcoor[$cvxl]}" | img2stdcoord -img ${featdir}/example_func -std $bckimg -xfm $imatfl -vox -)"
+            fi
+        fi
+        echo "$prestr ${zvals[$cvxl]} ${cvals[$cvxl]} ${pvals[$cvxl]} ${xcoor[$cvxl]} ${ycoor[$cvxl]} ${zcoor[$cvxl]} $mnicoor" >> $fodir/cope${ccope}_vxl_tbl.dat
+    done
+
+    # create summary statistics via R?
+
+    # get: voxels - volume - mean - std - min - max - 10% - median - 90% - max_x - max_y - max_z
+    cstats=$(fslstats ${featdir}/stats/cope${ccope} -k $cmask -v -m -s -R -p 10 -p 50 -p 90 -x)
+
+    echo -n "$prestr $ccope $cnm" >> $fodir/roi_tbl.dat
+    echo -n "$(fslstats ${featdir}/stats/cope${ccope}  -k $cmask -v -m -s -R -p 10 -p 50 -p 90 -x)" >> $fodir/roi_tbl.dat
+    echo -n "$(fslstats ${featdir}/stats/pe${ccope}    -k $cmask -v -m -s -R -p 10 -p 50 -p 90 -x)" >> $fodir/roi_tbl.dat
+    echo    "$(fslstats ${featdir}/stats/zstat${ccope} -k $cmask -v -m -s -R -p 10 -p 50 -p 90 -x)" >> $fodir/roi_tbl.dat
+
+done
+
+#__________________________________________________________________________________________#
+if [ $keep_tmp -eq 0 ]
+then
+    rm -r $tmpdir
+fi
+
+
+# mkdir -p /foo/bar && cp myfile "$_"
+# rsync -a myfile /foo/bar/ # works if /foo exists but /foo/bar doesn't.  bar is created.
+
+
+# echo 33 12 6 | /usr/share/fsl/5.0/bin/img2stdcoord -img example_func -std reg/standard -premat reg/example_func2highres.mat -warp reg/highres2standard_warp -vox -
+
+# /usr/share/fsl/5.0/bin/applywarp --ref=example_func --in=/home/data/exppsy/CC_reward/glm/RT_as_Display_Modulator/FL/S03_run_02.feat/V4_left./mask --out=/home/data/exppsy/CC_reward/glm/RT_as_Display_Modulator/FL/S03_run_02.feat/V4_left./mask --warp=reg/highres2standard_warp_inv --postmat=reg/highres2example_func.mat
+# /usr/share/fsl/5.0/bin/fslmaths /home/data/exppsy/CC_reward/glm/RT_as_Display_Modulator/FL/S03_run_02.feat/V4_left./mask -div 13.566506  /home/data/exppsy/CC_reward/glm/RT_as_Display_Modulator/FL/S03_run_02.feat/V4_left./mask
+# /usr/share/fsl/5.0/bin/fslmaths filtered_func_data -mul /home/data/exppsy/CC_reward/glm/RT_as_Display_Modulator/FL/S03_run_02.feat/V4_left./mask /home/data/exppsy/CC_reward/glm/RT_as_Display_Modulator/FL/S03_run_02.feat/V4_left./tmpts
+
+# echo 34 13 6 | /usr/share/fsl/5.0/bin/img2stdcoord -img example_func -std reg/standard -premat reg/example_func2highres.mat -warp reg/highres2standard_warp -vox -
+
+# featquery 1 /home/data/exppsy/CC_reward/glm/RT_as_Display_Modulator/FL/S03_run_02.feat 15  stats/pe1 stats/pe2 stats/pe3 stats/pe4 stats/pe5 stats/cope1 stats/cope2 stats/cope3 stats/cope4 stats/cope5 stats/zstat1 stats/zstat2 stats/zstat3 stats/zstat4 stats/zstat5 hIP1_left. -t 2.3 -s -b /home/data/exppsy/CC_reward/roi_dir/hIP1_left.nii.gz
+#
+#
+# fslroi /usr/share/fsl/5.0/data/atlases//Juelich/Juelich-prob-2mm /tmp/featquery_0Q2C3q 86 1   # V4 left
+#
+# /usr/share/fsl/5.0/bin/featquery 1 /home/data/exppsy/CC_reward/glm/RT_as_Display_Modulator/FL/S03_run_02.feat 15  stats/pe1 stats/pe2 stats/pe3 stats/pe4 stats/pe5 stats/cope1 stats/cope2 stats/cope3 stats/cope4 stats/cope5 stats/zstat1 stats/zstat2 stats/zstat3 stats/zstat4 stats/zstat5 V4_left. -t 2.3 -s -w /tmp/featquery_0Q2C3q
+#
+# Usage: featquery <N_featdirs> <featdir1> ... <N_stats> <stats1> ... <outputrootname> [-a <atlas>] [-p] [-t <thresh>] [-i <interp_thresh>] [-s] [-w] [-b] <mask> [-vox <X> <Y> <Z>]
+#
+# -a : use selected atlas to generate label (etc.) information
+# -p : convert PE / COPE values into %
+# -t : threshold stats images
+# -i : affect size of resampled masks by changing post-interpolation thresholding (default 0.5)
+# -s : create time-series plots
+# -w : do not binarise mask (allow weighting)
+# -b : popup results in browser when finished
+# <mask> is necessary even if using co-ordinates, because a co-ordinate frame is needed to refer the co-ordinates to; if it is a relative filename (ie doesn't start with "/") it will be looked for inside each FEAT directory
+# -vox can be replaced with -mm
+

@@ -80,7 +80,6 @@ do_keep=0
 do_neg=0
 do_thick=0
 do_flirt=0
-tmpdir=`tmpnam tmpPSC`
 xstr=""
 ystr=""
 zstr=""
@@ -97,7 +96,9 @@ get_coord=0
 usedefset=1
 ovly_stat=0
 
+tmpdir=`tmpnam tmpPSC`
 rm $tmpdir
+mkdir $tmpdir;
 
 #----------------------------------------------------------------------#
 # get options
@@ -186,6 +187,7 @@ do
                 shift 2
                 ;;
        -keep)   do_keep=1
+                echo "tmp dir: $tmpdir"
                 shift
                 ;;
           -*)   echo "Wrong option: <$1>"
@@ -198,24 +200,24 @@ do
 done
 
 #----------------------------------------------------------------------#
-mkdir $tmpdir;
-
-#----------------------------------------------------------------------#
 # get robust intensity range of background image
 if [ $getbckint -eq 1 ]
 then
     fslmaths $bg_img -abs -bin $tmpdir/bcknonzero -odt char
     bgint=$(fslstats $bg_img -k $tmpdir/bcknonzero -r )
 fi
+
 #----------------------------------------------------------------------#
 # coregister overlay statistics to background image
-if [ $ovly_stat -eq 1 ]
+if [ $(($ovly_stat+$do_flirt)) -eq 2 ]
 then
-    if [ $do_flirt -eq 1 ]
+    if [ $(imtest $transmat) -eq 1 ]
     then
+        applywarp --ref=$bg_img --in=$statmap --warp=$transmat --out=$tmpdir/ovstats_coreg
+    else
         flirt -in $statmap -ref $bg_img -init $transmat -applyxfm -o $tmpdir/ovstats_coreg -interp spline
-        statmap="$tmpdir/ovstats_coreg"
     fi
+    statmap="$tmpdir/ovstats_coreg"
 fi
 
 #----------------------------------------------------------------------#
@@ -370,7 +372,7 @@ then
     X=`echo $coords | awk '{print $1}'| xargs printf "%1.0f"`
     Y=`echo $coords | awk '{print $2}'| xargs printf "%1.0f"`
     Z=`echo $coords | awk '{print $3}'| xargs printf "%1.0f"`
-    echo "slice coordinates: X:$X Y:$Y Z:$Z"
+#     echo "slice coordinates: X:$X Y:$Y Z:$Z"
 
     if [ $(echo "$X+$Y+$Z" | bc -l) -eq 0 ]
     then
@@ -676,7 +678,7 @@ then
         fi
     done
 
-    echo "$xstr"
+#     echo "$xstr"
 #     echo "$xstr" >> $slcfl
 
     if [ $SglVXL -eq 0 ]
@@ -750,7 +752,7 @@ then
         fi
     done
 
-    echo "$ystr"
+#     echo "$ystr"
 #     echo "$ystr" >> $slcfl
 
     if [ $SglVXL -eq 0 ]
@@ -823,7 +825,7 @@ then
         fi
     done
 
-    echo "$zstr"
+#     echo "$zstr"
 #     echo "$zstr" >> $slcfl
 
     if [ $SglVXL -eq 0 ]

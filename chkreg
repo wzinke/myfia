@@ -75,7 +75,7 @@ then
     flirt -in ${reffl} -ref $infl -applyxfm -init $FSLDIR/etc/flirtsch/ident.mat -out $tmpdir/high2low
 elif [ `imtest $matfl` -eq 1 ]
 then
-    invwarp   --ref=$infl --warp=$matfl --out=$tmpdir/high2low_warp  --force
+    invwarp   --ref=$infl --warp=$matfl --out=$tmpdir/high2low_warp  
 
     if [ $combtrans -eq 1 ]
     then
