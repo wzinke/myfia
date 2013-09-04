@@ -308,12 +308,12 @@ do
     # create summary statistics via R?
 
     # get: voxels - volume - mean - std - min - max - 10% - median - 90% - max_x - max_y - max_z
-    cstats=$(fslstats ${featdir}/stats/cope${ccope} -k $cmask -v -m -s -R -p 10 -p 50 -p 90 -x)
+#     cstats=$(fslstats ${featdir}/stats/cope${ccope} -k $cmask -v -m -s -R -p 10 -p 50 -p 90 -x)
 
     echo -n "$prestr $ccope $cnm" >> $fodir/roi_tbl.dat
     echo -n "  $(fslstats ${featdir}/stats/cope${ccope}  -k $cmask -v -m -s -R -p 10 -p 50 -p 90 -x)" >> $fodir/roi_tbl.dat
-    echo -n "  $(fslstats ${featdir}/stats/pe${ccope}    -k $cmask -v -m -s -R -p 10 -p 50 -p 90 -x)" >> $fodir/roi_tbl.dat
-    echo    "  $(fslstats ${featdir}/stats/zstat${ccope} -k $cmask -v -m -s -R -p 10 -p 50 -p 90 -x)" >> $fodir/roi_tbl.dat
+    echo -n "  $(fslstats ${featdir}/stats/pe${ccope}    -k $cmask -m -s -R -p 10 -p 50 -p 90 -x)" >> $fodir/roi_tbl.dat
+    echo    "  $(fslstats ${featdir}/stats/zstat${ccope} -k $cmask -m -s -R -p 10 -p 50 -p 90 -x)" >> $fodir/roi_tbl.dat
 
 done
 
