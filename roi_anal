@@ -240,7 +240,8 @@ else
 fi
 imatfl=$tmpdir/invmat
 
-fslmaths $fodir/roi -thr 0.5 -bin -mul ${featdir}/mask $fodir/roi -odt char # this threshold assumes an interpolation of a binary mask
+fslmaths $fodir/roi -thr 0.5 -bin -mul ${featdir}/mask $fodir/roithr -odt char # this threshold assumes an interpolation of a binary mask
+immv $fodir/roithr $fodir/roi
 
 vol_slicer ${featdir}/example_func -stat $fodir/roi -thick -s 2 -cog -statrng 0.5 4 -out $fodir/roi.png
 if [ $do_back -eq 1 ]
