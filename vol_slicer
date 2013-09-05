@@ -215,9 +215,16 @@ then
     then
         applywarp --ref=$bg_img --in=$statmap --warp=$transmat --out=$tmpdir/ovstats_coreg
     else
-        flirt -in $statmap -ref $bg_img -init $transmat -applyxfm -o $tmpdir/ovstats_coreg -interp spline
+        flirt -in $statmap -ref $bg_img -init $transmat -applyxfm -o $tmpdir/ovstats_coreg
     fi
-    statmap="$tmpdir/ovstats_coreg"
+
+    if [ "$(fslval $statmap data_type)" == "UINT8" ]
+    then
+        fslmaths $tmpdir/ovstats_coreg -thr 0.5 -bin $tmpdir/ovstats_coreg_thr -odt char
+        statmap="$tmpdir/ovstats_coreg_thr"
+    else
+        statmap="$tmpdir/ovstats_coreg"
+    fi
 fi
 
 #----------------------------------------------------------------------#

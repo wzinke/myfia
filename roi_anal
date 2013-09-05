@@ -24,6 +24,7 @@ cat << EOF
             -imat    <matfl>      Invert this transformation matrix\warpfield
             -bck     <bckimg>     background image for ROI
             -mni                  ROI is defined in MNI space
+            -nt                   do not apply coordinate transformation (to safe time)
             -pfx <pfxhd> <pfxln>  print this string prior the roi statistics
             -keep                 don't delete temporary files when finished
 
@@ -40,15 +41,17 @@ exit 1
 
 }
 
+# TODO: check if coordinate transform works with a single img2stdcoord call by using a file with coordinates
 # TODO: implement percent transformation
 # TODO: add ts_plot
 # TODO: option to use premat with warp field
+# TODO: create summary plots/statistics with R?
 
 if [ $# -lt 3 ]; then
     Usage
 else
-    featdir="$(dirname $(realpath $1))/$(basename $(realpath $1))"
-    roi=$2
+    featdir="$(dirname $(readlink -f $1))/$(basename $(readlink -f $1))"
+    inmask="$2"
     copelst="$3"
     shift 3
 fi
@@ -65,10 +68,10 @@ then
     exit 0
 fi
 
-if [ $(imtest $roi) -ne 1 ]
+if [ $(imtest $inmask) -ne 1 ]
 then
     echo "ERROR: ROI mask not found!"
-    echo "       $roi"
+    echo "       $inmask"
     exit 0
 fi
 
@@ -87,7 +90,7 @@ tmpdir=`tmpnam tmp_roianal`
 rm $tmpdir
 mkdir $tmpdir
 
-roinm=$(remove_ext $roi)
+roinm=$(remove_ext $inmask)
 roinm=$(basename $roinm)
 
 odir=$roinm
@@ -97,6 +100,7 @@ got_thr=0
 do_perc=0
 do_back=0
 do_mni=0
+do_trans=1
 get_mat=1
 do_inv=0
 thropt="0"
@@ -160,12 +164,15 @@ do
                 mnistr="MNI_X MNI_X MNI_X"
                 shift
                 ;;
+          -nt)  do_trans=0
+                shift
+                ;;
         -perc)  do_perc=1
                 echo "WARNING: scaling to PSC not implemented yet, option ignored!"
                 shift
                 ;;
-        -pfx)   prestr="$2"
-                prehd="$3"
+        -pfx)   prestr="$3"
+                prehd="$2"
                 shift 3
                 ;;
         -keep)  keep_tmp=1
@@ -180,6 +187,10 @@ do
                 ;;
     esac
 done
+
+
+fslmaths $inmask -bin $tmpdir/roi -odt char
+roi=$tmpdir/roi
 
 fodir=$dirpath/$odir
 
@@ -229,7 +240,7 @@ else
 fi
 imatfl=$tmpdir/invmat
 
-fslmaths $fodir/roi -thr 0.5 $fodir/roi -odt char # this threshold assumes an interpolation of a binary mask
+fslmaths $fodir/roi -thr 0.5 -bin -mul ${featdir}/mask $fodir/roi -odt char # this threshold assumes an interpolation of a binary mask
 
 vol_slicer ${featdir}/example_func -stat $fodir/roi -thick -s 2 -cog -statrng 0.5 4 -out $fodir/roi.png
 if [ $do_back -eq 1 ]
@@ -246,8 +257,16 @@ roivxl=$(fslstats $fodir/roi -V | awk '{print $1}')
 echo -n "$prehd  copenum  copename  voxels  volume" > $fodir/roi_tbl.dat
 echo -n "  C_mean  C_std  C_min  C_max  C_10  C_median  C_90  C_max_x  C_max_y  C_max_z" >> $fodir/roi_tbl.dat
 echo -n "  P_mean  P_std  P_min  P_max  P_10  P_median  P_90  P_max_x  P_max_y  P_max_z" >> $fodir/roi_tbl.dat
-echo    "  Z_mean  Z_std  Z_min  Z_max  Z_10  Z_median  Z_90  Z_max_x  Z_max_y  Z_max_z" >> $fodir/roi_tbl.dat
+echo -n "  Z_mean  Z_std  Z_min  Z_max  Z_10  Z_median  Z_90  Z_max_x  Z_max_y  Z_max_z" >> $fodir/roi_tbl.dat
 
+if [ $do_mni -eq 1 ]
+then
+    echo -n "  C_max_x_MNI  C_max_y_MNI  C_max_z_MNI" >> $fodir/roi_tbl.dat
+    echo -n "  P_max_x_MNI  P_max_y_MNI  P_max_z_MNI" >> $fodir/roi_tbl.dat
+    echo -n "  Z_max_x_MNI  Z_max_y_MNI  Z_max_z_MNI" >> $fodir/roi_tbl.dat
+fi
+
+echo ""  >> $fodir/roi_tbl.dat
 
 for ccope in $copelst
 do
@@ -293,7 +312,7 @@ do
     mnicoor=""
     for cvxl in $(seq $numvxl)
     do
-        if [ $do_mni -eq 1 ]
+        if [ $(($do_mni+$do_trans)) -eq 2 ]
         then
             if [ $(imtest $imatfl) -eq 1 ]
             then
@@ -305,15 +324,28 @@ do
         echo "$prestr ${zvals[$cvxl]} ${cvals[$cvxl]} ${pvals[$cvxl]} ${xcoor[$cvxl]} ${ycoor[$cvxl]} ${zcoor[$cvxl]} $mnicoor" >> $fodir/cope${ccope}_vxl_tbl.dat
     done
 
-    # create summary statistics via R?
-
-    # get: voxels - volume - mean - std - min - max - 10% - median - 90% - max_x - max_y - max_z
-#     cstats=$(fslstats ${featdir}/stats/cope${ccope} -k $cmask -v -m -s -R -p 10 -p 50 -p 90 -x)
-
     echo -n "$prestr $ccope $cnm" >> $fodir/roi_tbl.dat
     echo -n "  $(fslstats ${featdir}/stats/cope${ccope}  -k $cmask -v -m -s -R -p 10 -p 50 -p 90 -x)" >> $fodir/roi_tbl.dat
     echo -n "  $(fslstats ${featdir}/stats/pe${ccope}    -k $cmask -m -s -R -p 10 -p 50 -p 90 -x)" >> $fodir/roi_tbl.dat
-    echo    "  $(fslstats ${featdir}/stats/zstat${ccope} -k $cmask -m -s -R -p 10 -p 50 -p 90 -x)" >> $fodir/roi_tbl.dat
+    echo -n "  $(fslstats ${featdir}/stats/zstat${ccope} -k $cmask -m -s -R -p 10 -p 50 -p 90 -x)" >> $fodir/roi_tbl.dat
+
+    if [ $(($do_mni+$do_trans)) -eq 2 ]
+    then
+        if [ $(imtest $matfl) -eq 1 ]
+        then
+            echo -n "  $(fslstats ${featdir}/stats/cope${ccope}  -k $cmask -x | img2stdcoord -img ${featdir}/example_func -std $bckimg -warp $imatfl -vox -)" >> $fodir/roi_tbl.dat
+            echo -n "  $(fslstats ${featdir}/stats/pe${ccope}  -k $cmask -x | img2stdcoord -img ${featdir}/example_func -std $bckimg -warp $imatfl -vox -)" >> $fodir/roi_tbl.dat
+            echo -n "  $(fslstats ${featdir}/stats/zstat${ccope}  -k $cmask -x | img2stdcoord -img ${featdir}/example_func -std $bckimg -warp $imatfl -vox -)" >> $fodir/roi_tbl.dat
+
+        else
+            echo -n "  $(fslstats ${featdir}/stats/cope${ccope}  -k $cmask -x | img2stdcoord -img ${featdir}/example_func -std $bckimg -xfm $imatfl -vox -)" >> $fodir/roi_tbl.dat
+            echo -n "  $(fslstats ${featdir}/stats/pe${ccope}  -k $cmask -x | img2stdcoord -img ${featdir}/example_func -std $bckimg -xfm $imatfl -vox -)" >> $fodir/roi_tbl.dat
+            echo -n "  $(fslstats ${featdir}/stats/zstat${ccope}  -k $cmask -x | img2stdcoord -img ${featdir}/example_func -std $bckimg -xfm $imatfl -vox -)" >> $fodir/roi_tbl.dat
+        fi
+    fi
+    echo ""  >> $fodir/roi_tbl.dat
+
+    # create summary statistics via R?
 
 done
 
