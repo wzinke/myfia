@@ -16,7 +16,7 @@ cat << EOF
 
     OPTIONS:
             -odir    <basename>   output directory (default: roi name)
-            -dirpath <dirname>    root output directory (default: $featdir)
+            -dirpath <dirname>    root output directory (default: <featdir>)
             -thr     <thr>        use only voxel above this absolute threshold
             -thrP    <thr%>       use only voxel above this relative threshold
             -perc                 convert to percent signal change (whatever this is, NIY!)
@@ -188,7 +188,6 @@ do
     esac
 done
 
-
 fslmaths $inmask -bin $tmpdir/roi -odt char
 roi=$tmpdir/roi
 
@@ -260,7 +259,7 @@ echo -n "  C_mean  C_std  C_min  C_max  C_10  C_median  C_90  C_max_x  C_max_y  
 echo -n "  P_mean  P_std  P_min  P_max  P_10  P_median  P_90  P_max_x  P_max_y  P_max_z" >> $fodir/roi_tbl.dat
 echo -n "  Z_mean  Z_std  Z_min  Z_max  Z_10  Z_median  Z_90  Z_max_x  Z_max_y  Z_max_z" >> $fodir/roi_tbl.dat
 
-if [ $(($do_mni+$do_trans)) -eq 2 ]
+if [ $do_mni -eq 1 ]
 then
     echo -n "  C_max_x_MNI  C_max_y_MNI  C_max_z_MNI" >> $fodir/roi_tbl.dat
     echo -n "  P_max_x_MNI  P_max_y_MNI  P_max_z_MNI" >> $fodir/roi_tbl.dat
@@ -330,7 +329,7 @@ do
     echo -n "  $(fslstats ${featdir}/stats/pe${ccope}    -k $cmask -m -s -R -p 10 -p 50 -p 90 -x)" >> $fodir/roi_tbl.dat
     echo -n "  $(fslstats ${featdir}/stats/zstat${ccope} -k $cmask -m -s -R -p 10 -p 50 -p 90 -x)" >> $fodir/roi_tbl.dat
 
-    if [ $(($do_mni+$do_trans)) -eq 2 ]
+    if [ $do_mni -eq 1 ]
     then
         if [ $(imtest $matfl) -eq 1 ]
         then
@@ -347,7 +346,6 @@ do
     echo ""  >> $fodir/roi_tbl.dat
 
     # create summary statistics via R?
-
 done
 
 #__________________________________________________________________________________________#
@@ -355,36 +353,3 @@ if [ $keep_tmp -eq 0 ]
 then
     rm -r $tmpdir
 fi
-
-
-# mkdir -p /foo/bar && cp myfile "$_"
-# rsync -a myfile /foo/bar/ # works if /foo exists but /foo/bar doesn't.  bar is created.
-
-
-# echo 33 12 6 | /usr/share/fsl/5.0/bin/img2stdcoord -img example_func -std reg/standard -premat reg/example_func2highres.mat -warp reg/highres2standard_warp -vox -
-
-# /usr/share/fsl/5.0/bin/applywarp --ref=example_func --in=/home/data/exppsy/CC_reward/glm/RT_as_Display_Modulator/FL/S03_run_02.feat/V4_left./mask --out=/home/data/exppsy/CC_reward/glm/RT_as_Display_Modulator/FL/S03_run_02.feat/V4_left./mask --warp=reg/highres2standard_warp_inv --postmat=reg/highres2example_func.mat
-# /usr/share/fsl/5.0/bin/fslmaths /home/data/exppsy/CC_reward/glm/RT_as_Display_Modulator/FL/S03_run_02.feat/V4_left./mask -div 13.566506  /home/data/exppsy/CC_reward/glm/RT_as_Display_Modulator/FL/S03_run_02.feat/V4_left./mask
-# /usr/share/fsl/5.0/bin/fslmaths filtered_func_data -mul /home/data/exppsy/CC_reward/glm/RT_as_Display_Modulator/FL/S03_run_02.feat/V4_left./mask /home/data/exppsy/CC_reward/glm/RT_as_Display_Modulator/FL/S03_run_02.feat/V4_left./tmpts
-
-# echo 34 13 6 | /usr/share/fsl/5.0/bin/img2stdcoord -img example_func -std reg/standard -premat reg/example_func2highres.mat -warp reg/highres2standard_warp -vox -
-
-# featquery 1 /home/data/exppsy/CC_reward/glm/RT_as_Display_Modulator/FL/S03_run_02.feat 15  stats/pe1 stats/pe2 stats/pe3 stats/pe4 stats/pe5 stats/cope1 stats/cope2 stats/cope3 stats/cope4 stats/cope5 stats/zstat1 stats/zstat2 stats/zstat3 stats/zstat4 stats/zstat5 hIP1_left. -t 2.3 -s -b /home/data/exppsy/CC_reward/roi_dir/hIP1_left.nii.gz
-#
-#
-# fslroi /usr/share/fsl/5.0/data/atlases//Juelich/Juelich-prob-2mm /tmp/featquery_0Q2C3q 86 1   # V4 left
-#
-# /usr/share/fsl/5.0/bin/featquery 1 /home/data/exppsy/CC_reward/glm/RT_as_Display_Modulator/FL/S03_run_02.feat 15  stats/pe1 stats/pe2 stats/pe3 stats/pe4 stats/pe5 stats/cope1 stats/cope2 stats/cope3 stats/cope4 stats/cope5 stats/zstat1 stats/zstat2 stats/zstat3 stats/zstat4 stats/zstat5 V4_left. -t 2.3 -s -w /tmp/featquery_0Q2C3q
-#
-# Usage: featquery <N_featdirs> <featdir1> ... <N_stats> <stats1> ... <outputrootname> [-a <atlas>] [-p] [-t <thresh>] [-i <interp_thresh>] [-s] [-w] [-b] <mask> [-vox <X> <Y> <Z>]
-#
-# -a : use selected atlas to generate label (etc.) information
-# -p : convert PE / COPE values into %
-# -t : threshold stats images
-# -i : affect size of resampled masks by changing post-interpolation thresholding (default 0.5)
-# -s : create time-series plots
-# -w : do not binarise mask (allow weighting)
-# -b : popup results in browser when finished
-# <mask> is necessary even if using co-ordinates, because a co-ordinate frame is needed to refer the co-ordinates to; if it is a relative filename (ie doesn't start with "/") it will be looked for inside each FEAT directory
-# -vox can be replaced with -mm
-
