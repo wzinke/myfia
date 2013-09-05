@@ -308,7 +308,7 @@ do
     declare -a ycoor=($(cat $tmpdir/zstat${ccope}_all.dat  | awk '{print $2}'))
     declare -a zcoor=($(cat $tmpdir/zstat${ccope}_all.dat  | awk '{print $3}'))
 
-    echo "$prehd zstat cope pe func_X func_Y func_Z $mnistr" > $fodir/cope${ccope}_vxl_tbl.dat
+    echo "$prehd   copenum  copename zstat cope pe func_X func_Y func_Z $mnistr" > $fodir/cope${ccope}_vxl_tbl.dat
     mnicoor=""
     for cvxl in $(seq 0 $(($numvxl-1)) )
     do
@@ -321,7 +321,7 @@ do
                 mnicoor="$(echo "${xcoor[$cvxl]} ${ycoor[$cvxl]} ${zcoor[$cvxl]}" | img2stdcoord -img ${featdir}/example_func -std $bckimg -xfm $imatfl -vox -)"
             fi
         fi
-        echo "$prestr ${zvals[$cvxl]} ${cvals[$cvxl]} ${pvals[$cvxl]} ${xcoor[$cvxl]} ${ycoor[$cvxl]} ${zcoor[$cvxl]} $mnicoor" >> $fodir/cope${ccope}_vxl_tbl.dat
+        echo "$prestr $ccope $cnm ${zvals[$cvxl]} ${cvals[$cvxl]} ${pvals[$cvxl]} ${xcoor[$cvxl]} ${ycoor[$cvxl]} ${zcoor[$cvxl]} $mnicoor" >> $fodir/cope${ccope}_vxl_tbl.dat
     done
 
     echo -n "$prestr $ccope $cnm" >> $fodir/roi_tbl.dat
