@@ -259,7 +259,7 @@ echo -n "  C_mean  C_std  C_min  C_max  C_10  C_median  C_90  C_max_x  C_max_y  
 echo -n "  P_mean  P_std  P_min  P_max  P_10  P_median  P_90  P_max_x  P_max_y  P_max_z" >> $fodir/roi_tbl.dat
 echo -n "  Z_mean  Z_std  Z_min  Z_max  Z_10  Z_median  Z_90  Z_max_x  Z_max_y  Z_max_z" >> $fodir/roi_tbl.dat
 
-if [ $do_mni -eq 1 ]
+if [ $(($do_mni+$do_trans)) -eq 2 ]
 then
     echo -n "  C_max_x_MNI  C_max_y_MNI  C_max_z_MNI" >> $fodir/roi_tbl.dat
     echo -n "  P_max_x_MNI  P_max_y_MNI  P_max_z_MNI" >> $fodir/roi_tbl.dat
@@ -310,7 +310,7 @@ do
 
     echo "$prehd zstat cope pe func_X func_Y func_Z $mnistr" > $fodir/cope${ccope}_vxl_tbl.dat
     mnicoor=""
-    for cvxl in $(seq $numvxl)
+    for cvxl in $(seq 0 $(($numvxl-1)) )
     do
         if [ $(($do_mni+$do_trans)) -eq 2 ]
         then
