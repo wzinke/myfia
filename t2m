@@ -1,0 +1,53 @@
+#!/bin/bash
+#
+# t2m
+#
+# created: 07.07.2011
+# by zinke
+#
+
+Usage() {
+cat << EOF
+
+    Usage: $0 <x y z>
+
+	Converts Talairach coordinates to MNI coordinates using a
+	matlab script provided by Matthew Brett
+
+    OPTIONS:
+            -
+
+            ###########################################################
+            ##   (c) wolf zinke (2011) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##     for comments and questions: wolfzinke@gmx.net     ##
+            ###########################################################
+
+
+EOF
+exit 1
+
+}
+
+
+if [ $# -lt 3 ]; then
+    Usage
+else
+    xc=$1;
+    yc=$2;
+    zc=$3;
+    shift 3
+fi
+
+#__________________________________________________________________________________________#
+
+ofl=`tmpnam`
+
+# errmsg=`echo "addpath('/DATA/MAFIA/matlab/fmri'); mnic = tal2mni([$xc $yc $zc]);         dlmwrite('$ofl', mnic, ' '); exit;" | matlab -nojvm -nodisplay -nosplash`
+
+rtpath=$(which $0)
+
+errmsg=`echo "addpath('$rtpath'); mnic = tal2icbm_fsl([$xc $yc $zc]);         dlmwrite('$ofl', mnic, ' '); exit;" | matlab -nojvm -nodisplay -nosplash`
+
+cat $ofl
+
