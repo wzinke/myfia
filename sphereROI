@@ -92,12 +92,14 @@ done
 
 #__________________________________________________________________________________________#
 
-if[ $do_mm -eq 1 ]
+if [ $do_mm -eq 1 ]
 then
     vc=$(echo "${coorX} ${coorY} ${coorZ}" | std2imgcoord -img $refimg -std $refimg -vox -)
-    coorX=$(echo "$vc" | cut -d' ' -f1)
-    coorY=$(echo "$vc" | cut -d' ' -f2)
-    coorZ=$(echo "$vc" | cut -d' ' -f3)
+    coorX=$(echo "$vc" | sed -e 's/  / /g' | cut -d' ' -f1 | xargs printf "%1.0f")
+    coorY=$(echo "$vc" | sed -e 's/  / /g' | cut -d' ' -f2 | xargs printf "%1.0f")
+    coorZ=$(echo "$vc" | sed -e 's/  / /g' | cut -d' ' -f3 | xargs printf "%1.0f")
+
+    echo "ROI centered at Voxel: ${coorX} ${coorY} ${coorZ}"
 fi
 
 fslmaths $refimg -mul 0 -add 1 -roi ${coorX} 1 ${coorY} 1 ${coorZ} 1 0 1 -kernel sphere $radius $krnlstr $onm $otstr
