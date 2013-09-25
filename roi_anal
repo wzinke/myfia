@@ -19,6 +19,7 @@ cat << EOF
             -dirpath <dirname>    root output directory (default: <featdir>)
             -thr     <thr>        use only voxel above this absolute threshold
             -thrP    <thr%>       use only voxel above this relative threshold
+            -roiThr  <thr>        threshold the ROI mask at this absolute value.
             -perc                 convert to percent signal change (whatever this is, NIY!)
             -mat     <matfl>      use this transformation matrix\warpfield
             -imat    <matfl>      Invert this transformation matrix\warpfield
@@ -103,6 +104,7 @@ do_mni=0
 do_trans=1
 get_mat=1
 do_inv=0
+mthrstr=""
 thropt="0"
 thrval=0
 keep_tmp=0
@@ -140,6 +142,9 @@ do
                     thropt="p"
                     thrval=$2
                 fi
+                shift 2
+                ;;
+      -roiThr)  mthrstr="-thr $2"
                 shift 2
                 ;;
          -mat)  get_mat=0
@@ -187,7 +192,7 @@ do
     esac
 done
 
-fslmaths $inmask -bin $tmpdir/roi -odt char
+fslmaths $inmask $mthrstr -bin $tmpdir/roi -odt char
 roi=$tmpdir/roi
 
 fodir=$dirpath/$odir
