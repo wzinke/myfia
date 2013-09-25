@@ -1,0 +1,136 @@
+#!/usr/bin/env python
+
+# run searchlight analysis.
+
+###########################################################
+##   (c) wolf zinke (2012) - part of the MaFIA toolbox   ##
+##         > MAcaque Functional Image Analysis <         ##
+##            Licensed under the MIT license             ##
+###########################################################
+
+#########################################################################
+### import python modules
+import matplotlib
+matplotlib.use('Agg')
+import os
+import argparse
+import pylab as pl
+
+#########################################################################
+### get command line arguments
+
+parser = argparse.ArgumentParser(description='Run searchlight analysis on a data set.')
+parser.add_argument('ds',  help='data set')
+parser.add_argument('-attr',  required=True, help='attribute file')
+parser.add_argument('-roi',   default=None,  help='roi mask file')
+parser.add_argument('-nz',    action='store_false', default=True, help='No z-scoring of the data set')
+parser.add_argument('-cnd',   help='targets for subset', action='append', default=[])
+parser.add_argument('-clf',   default="smlr", help='Classier (knn, svm, nusvm, smlr)')
+parser.add_argument('-ts',    default=2, type=int, help='number of runs used as test set')
+parser.add_argument('-rep',   default=100,  type=int, help='number of repetitions')
+parser.add_argument('-onm',   default="MVPA_SL",   help='output file name')
+
+cla = parser.parse_args()
+
+#########################################################################
+### load modules necessary for mvpa analysis
+
+import numpy as np
+
+from mvpa2.datasets.mri         import map2nifti
+from mvpa2.generators.partition import NFoldPartitioner
+from mvpa2.measures.base        import CrossValidation
+from mvpa2.misc.errorfx         import mean_match_accuracy, mean_mismatch_error
+from mvpa2.misc.io              import SampleAttributes
+from mvpa2.datasets.mri         import fmri_dataset
+from mvpa2.mappers.zscore       import zscore
+from mvpa2.mappers.fx           import mean_sample
+from mvpa2.clfs.stats           import MCNullDist, AttributePermutator
+from mvpa2.generators.base      import Repeater
+from mvpa2.base.node            import ChainNode
+
+#########################################################################
+### run searchlight analysis
+
+# load two column text file specifying data attributes
+attr = SampleAttributes(cla.attr)
+ 
+# load data set
+ds = fmri_dataset(cla.ds, targets=attr.targets, chunks=attr.chunks, mask=cla.roi)
+
+# apply zsoring run-wise
+if cla.nz:
+    zscore(ds, chunks_attr='chunks')
+
+# take subset of the data
+if len(cla.cnd) > 0:
+    cds = ds[np.in1d(ds.T,cla.cnd)]
+else:
+    cds = ds
+
+# specify the classifier
+if cla.clf == "knn":
+    from mvpa2.clfs.knn  import kNN
+    clf  = kNN()
+elif cla.clf == "svm":
+    from mvpa2.clfs.svm  import LinearCSVMC
+    clf  = LinearCSVMC()
+elif cla.clf == "nusvm":
+    from mvpa2.clfs.svm  import LinearNuSVMC
+    clf  = LinearNuSVMC()
+elif cla.clf == "smlr":
+    from mvpa2.clfs.smlr import SMLR
+    clf  = SMLR()
+
+# method to splitt data into training and test sets
+splt = NFoldPartitioner(cvtype=cla.ts, attr='chunks')
+
+repeater   = Repeater(count=cla.rep)
+permutator = AttributePermutator('targets', limit={'partitions': 1}, count=1)
+
+null_cv = CrossValidation(
+            clf,
+            ChainNode([splt, permutator], space=splt.get_space()),
+            errorfx=mean_mismatch_error,
+                           postproc=mean_sample())
+distr_est = MCNullDist(repeater, tail='left', measure=null_cv,
+                       enable_ca=['dist_samples'])
+
+cv = CrossValidation(clf, splt, errorfx=mean_mismatch_error, enable_ca=['stats'],
+                           postproc=mean_sample(), null_dist=distr_est)
+
+err = cv(cds)
+
+#########################################################################
+
+acc = cv.ca.stats.stats['ACC%']
+mean_dist   = np.mean(cv.null_dist.ca.dist_samples)
+median_dist = np.median(cv.null_dist.ca.dist_samples)
+std_dist    = np.std(cv.null_dist.ca.dist_samples)
+MCpermvals  = np.squeeze(cv.null_dist.ca.dist_samples)
+p = cv.ca.null_prob
+pval  = np.asscalar(np.ravel(p))
+cverr = np.asscalar(np.ravel(err))
+
+# write data to file
+
+np.savetxt(cla.onm+'_hist.dat', MCpermvals, fmt='%.6f')
+
+text_file = open(cla.onm+'.dat', "w")
+text_file.write('num_voxel  ACC  meanNULL  medianNULL  stdNULL  p_value CVerr')
+text_file.write('\n'+str(ds.shape[1])+'  '+str(acc)+'  '+str(mean_dist)+'  '+str(median_dist)+'  '+str(std_dist)+'  '+str(pval)+'  '+str(cverr)+'\n')
+text_file.close()
+
+# plot histogram
+pl.hist(np.ravel(cv.null_dist.ca.dist_samples), bins=20)
+pl.axvline(np.asscalar(err), color='red')
+pl.axvline(0.5, color='black', ls='--')
+pl.axvline(mean_dist, color='blue', ls='-')
+pl.axvline(median_dist, color='green', ls='..')
+pl.xlim(0,1)
+pl.xlabel('Average cross-validated classification error')
+pl.savefig(cla.onm+'.eps')
+
+#########################################################################
+if __name__ == "__mvpa_roiMC__":
+    mvpa_roiMC()

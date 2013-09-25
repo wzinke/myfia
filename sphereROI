@@ -22,8 +22,12 @@ cat << EOF
     OPTIONS:
             -ref    reference image
                     (default: "$FSLDIR/data/standard/MNI152_T1_2mm_brain")
+            -trgt   target image space if transformation is required
             -o      output file name
             -mm     input coordinates are in mm, not voxel
+            -warp   warp field to get center into functional space
+            -mat    transformation matrix to get center into functional space
+            -premat pre-warp transformation matrix
             -f      speed up the process (use -fmean instead of -dilF)
             -p      create png image showing the ROI location
 
@@ -50,16 +54,25 @@ else
     shift 4
 fi
 
+#__________________________________________________________________________________________#
+
 do_mean=0
 onm=ROIsphere_X${coorX}Y${coorY}Z${coorZ}
 refimg=$FSLDIR/data/standard/MNI152_T1_2mm_brain
 otstr="-odt char"
 krnlstr="-dilF"
 
-#__________________________________________________________________________________________#
 
 do_mm=0
 do_plot=0
+do_trans=0
+transstr=""
+got_trgt=0
+dimstr="-vox"
+
+tmpdir=`tmpnam tmpSphere`
+rm $tmpdir
+mkdir $tmpdir;
 
 while [ $# -gt 0 ] ;
 do
@@ -75,8 +88,25 @@ do
         -ref)   refimg=$1
                 shift 2
                 ;;
+       -trgt)   trgtimg=$1
+                got_trgt=1
+                shift 2
+                ;;
          -mm)   do_mm=1
+                dimstr="-mm"
                 shift
+                ;;
+        -mat)   transstr="$transstr -xfm $1"
+                do_trans=1
+                shift 2
+                ;;
+       -warp)   transstr="$transstr -warp $1"
+                do_trans=1
+                shift 2
+                ;;
+     -premat)   transstr="$transstr -premat $1"
+                do_trans=1
+                shift 2
                 ;;
           -p)   do_plot=1
                 shift
@@ -95,11 +125,36 @@ done
 if [ $do_mm -eq 1 ]
 then
     vc=$(echo "${coorX} ${coorY} ${coorZ}" | std2imgcoord -img $refimg -std $refimg -vox -)
-    coorX=$(echo "$vc" | sed -e 's/  / /g' | cut -d' ' -f1 | xargs printf "%1.0f")
-    coorY=$(echo "$vc" | sed -e 's/  / /g' | cut -d' ' -f2 | xargs printf "%1.0f")
-    coorZ=$(echo "$vc" | sed -e 's/  / /g' | cut -d' ' -f3 | xargs printf "%1.0f")
+    coorX=$(echo "$vc" | sed -e 's/  / /g' | cut -d' ' -f1)
+    coorY=$(echo "$vc" | sed -e 's/  / /g' | cut -d' ' -f2)
+    coorZ=$(echo "$vc" | sed -e 's/  / /g' | cut -d' ' -f3)
 
     echo "ROI centered at Voxel: ${coorX} ${coorY} ${coorZ}"
+fi
+
+vc="${coorX} ${coorY} ${coorZ}"
+
+if [ $do_trans -eq 1 ]
+then
+    if [ $got_trgt -eq 1 ]
+    then
+        echo "${vc}" > $tmpdir/coor
+        vc=$(img2imgcoord -src $refimg -dest $trgtimg $transstr $dimstr $tmpdir/coor)
+    else
+        vc=$(echo "${vc}" | std2imgcoord -img $refimg $transstr $dimstr -)
+    fi
+elif [ $do_mm -eq 1 ]
+    vc=$(echo "${vc}" | std2imgcoord -img $refimg -std $refimg -vox -)
+fi
+
+coorX=$(echo "$vc" | sed -e 's/  / /g' | cut -d' ' -f1 | xargs printf "%1.0f")
+coorY=$(echo "$vc" | sed -e 's/  / /g' | cut -d' ' -f2 | xargs printf "%1.0f")
+coorZ=$(echo "$vc" | sed -e 's/  / /g' | cut -d' ' -f3 | xargs printf "%1.0f")
+
+
+if [ $got_trgt -eq 0 ]
+then
+    trgtimg=$refimg
 fi
 
 fslmaths $refimg -mul 0 -add 1 -roi ${coorX} 1 ${coorY} 1 ${coorZ} 1 0 1 -kernel sphere $radius $krnlstr $onm $otstr
@@ -113,5 +168,8 @@ fi
 
 if [ $do_plot -eq 1 ]
 then
-    vol_slicer $refimg -stat $onm -thick -s 2 -cog -statrng 0.5 4 -out $onm.png
+    vol_slicer $trgtimg -stat $onm -thick -s 2 -cog -statrng 0.5 4 -out $onm.png
 fi
+
+
+rm -r $tmpdir
