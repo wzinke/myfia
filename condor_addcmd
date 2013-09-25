@@ -51,6 +51,7 @@ do
                 ;;
         -log)   keeplog=1
                 lognm=$2
+                mkdir -p $(dirname ${lognm})
                 shift 2
                 ;;
        -shim)   do_shim=1
@@ -83,6 +84,4 @@ else
 
     echo "Queue" $ostr
     echo "" $ostr
-
 fi
-

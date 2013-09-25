@@ -215,9 +215,16 @@ then
     then
         applywarp --ref=$bg_img --in=$statmap --warp=$transmat --out=$tmpdir/ovstats_coreg
     else
-        flirt -in $statmap -ref $bg_img -init $transmat -applyxfm -o $tmpdir/ovstats_coreg -interp spline
+        flirt -in $statmap -ref $bg_img -init $transmat -applyxfm -o $tmpdir/ovstats_coreg
     fi
-    statmap="$tmpdir/ovstats_coreg"
+
+    if [ "$(fslval $statmap data_type)" == "UINT8" ]
+    then
+        fslmaths $tmpdir/ovstats_coreg -thr 0.5 -bin $tmpdir/ovstats_coreg_thr -odt char
+        statmap="$tmpdir/ovstats_coreg_thr"
+    else
+        statmap="$tmpdir/ovstats_coreg"
+    fi
 fi
 
 #----------------------------------------------------------------------#
@@ -236,8 +243,10 @@ zmin=$(echo $bckfov | cut -d' ' -f5)
 zmax=$(echo $bckfov | cut -d' ' -f6)
 
 # correct X-ccordinates
-xmn=$(echo "$xmin -1" | bc -l)
-xmx=$(echo "$xmax +2" | bc -l)
+# xmn=$(echo "$xmin -1" | bc -l)
+# xmx=$(echo "$xmax +2" | bc -l)
+xmn=$xmin
+xmx=$xmax
 if [ $xmn -lt 0 ]
 then
     xmx=$(echo "$xmx + $xmn")
@@ -265,8 +274,11 @@ then
 fi
 
 # correct Y-ccordinates
-ymn=$(echo "$ymin -1" | bc -l)
-ymx=$(echo "$ymax +2" | bc -l)
+# ymn=$(echo "$ymin -1" | bc -l)
+# ymx=$(echo "$ymax +2" | bc -l)
+ymn=$ymin
+ymx=$ymax
+
 if [ $ymn -lt 0 ]
 then
     ymx=$(echo "$ymx + $ymn")
@@ -294,8 +306,11 @@ then
 fi
 
 # correct Z-ccordinates
-zmn=$(echo "$zmin -1" | bc -l)
-zmx=$(echo "$zmax +2" | bc -l)
+# zmn=$(echo "$zmin -1" | bc -l)
+# zmx=$(echo "$zmax +2" | bc -l)
+zmn=$zmin
+zmx=$zmax
+
 if [ $zmn -lt 0 ]
 then
     zmx=$(echo "$zmx + $zmn")
@@ -335,6 +350,7 @@ fi
 Xsz=$xmx
 Ysz=$ymx
 Zsz=$zmx
+
 
 # determine point size of text according to image size
 # maxsz=$(echo "max(c($Xsz,$Ysz,$Zsz))" | R --vanilla --slave | cut -d' ' -f2)
@@ -534,7 +550,7 @@ then
     fslmaths $tmpdir/all_slices -roi 0   $Xsz     $cY $slcwdth $cZ $slcwdth 0 1 $tmpdir/xslcsel
     fslmaths $tmpdir/all_slices -roi $cX $slcwdth 0   $Ysz     $cZ $slcwdth 0 1 $tmpdir/yslcsel
     fslmaths $tmpdir/all_slices -roi $cX $slcwdth $cY $slcwdth 0   $Zsz     0 1 $tmpdir/zslcsel
-
+\
     fslmaths $tmpdir/xslcsel -add $tmpdir/yslcsel -add $tmpdir/zslcsel $tmpdir/slcsel
     overlay 0 1 $bg_img $bgint $tmpdir/slcsel 1 4 $tmpdir/slc_vol
 

@@ -40,7 +40,9 @@ fi
 
 if [ "X$(dirname $execut)" == "X" ]
 then
-    $execut=$(which $execut)
+    execut=$(which $execut)
+else
+    execut=$(realpath $execut)
 fi
 
 #__________________________________________________________________________________________#
