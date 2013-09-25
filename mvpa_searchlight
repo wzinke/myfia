@@ -99,4 +99,4 @@ niftiresults.to_filename(os.path.join(cla.odir, cla.onm+'.nii.gz'))
 
 #########################################################################
 if __name__ == "__mvpa_searchlight__":
-    mvpa_SL_split()
+    mvpa_searchlight()

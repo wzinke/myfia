@@ -156,10 +156,15 @@ mkdir $tmpdir
 
 if [ $(imtest $fllst) -eq 1 ]
 then
-    mkdir $tmpdir/invols
-    fslsplit $fllst $tmpdir/invols/vol_ -t
+    if [ $(echo "$fllst" | wc -w) -eq 1 ]
+    then
+        mkdir $tmpdir/invols
+        fslsplit $fllst $tmpdir/invols/vol_ -t
 
-    vol_lst=$(ls -1 $tmpdir/invols/*.nii.gz)
+        vol_lst=$(ls -1 $tmpdir/invols/*.nii.gz)
+    else
+        vol_lst="$fllst"
+    fi
 else
     vol_lst=$(cat $fllst)
 fi
