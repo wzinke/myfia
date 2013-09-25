@@ -6,30 +6,30 @@
 # by zinke
 #
 
-# TODO: Add image transformations by adding a target image file and 
+# TODO: Add image transformations by adding a target image file and
 #       optional a transformation matrix with std2imgcoord
 
 Usage() {
 cat << EOF
 
     Usage: $0 <coor> <radius> [options]
-    
+
         create a spherical sphere with given radius centered at the voxel
         specified by coor as 'x y z'
-        
+
         see: https://www.jiscmail.ac.uk/cgi-bin/webadmin?A2=FSL;6ce4bff3.1301
 
     OPTIONS:
-            -ref    reference image 
+            -ref    reference image
                     (default: "$FSLDIR/data/standard/MNI152_T1_2mm_brain")
             -o      output file name
             -mm     input coordinates are in mm, not voxel
             -f      speed up the process (use -fmean instead of -dilF)
+            -p      create png image showing the ROI location
 
             ###########################################################
             ##   (c) wolf zinke (2013) - part of the MaFIA toolbox   ##
             ##         > MAcaque Functional Image Analysis <         ##
-            ##   for comments and questions: wolfzinke@gmail.com     ##
             ##            Licensed under the MIT license             ##
             ###########################################################
 
@@ -38,16 +38,16 @@ EOF
 exit 1
 
 }
- 
 
-if [ $# -lt 4 ]; then
+if [ $# -lt 4 ]
+then
     Usage
 else
     coorX=$1
     coorY=$2
     coorZ=$3
     radius=$4
-    shift 5
+    shift 4
 fi
 
 do_mean=0
@@ -55,9 +55,11 @@ onm=ROIsphere_X${coorX}Y${coorY}Z${coorZ}
 refimg=$FSLDIR/data/standard/MNI152_T1_2mm_brain
 otstr="-odt char"
 krnlstr="-dilF"
+
 #__________________________________________________________________________________________#
 
 do_mm=0
+do_plot=0
 
 while [ $# -gt 0 ] ;
 do
@@ -68,13 +70,16 @@ do
           -f)   do_mean=1
                 otstr=""
                 krnlstr="-fmean"
-                shift 
+                shift
                 ;;
         -ref)   refimg=$1
                 shift 2
                 ;;
          -mm)   do_mm=1
-                shift 
+                shift
+                ;;
+          -p)   do_plot=1
+                shift
                 ;;
            -*)   echo "Wrong option: <$1>"
                 echo ""
@@ -103,4 +108,8 @@ then
     thresh=$(echo "$thresh / 2" | bc -l)
     fslmaths $onm -thr $thresh -bin $onm -odt char
 fi
- 
+
+if [ $do_plot -eq 1 ]
+then
+    vol_slicer $refimg -stat $onm -thick -s 2 -cog -statrng 0.5 4 -out $onm.png
+fi
