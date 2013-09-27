@@ -25,6 +25,7 @@ cat << EOF
             -imat    <matfl>      Invert this transformation matrix\warpfield
             -bck     <bckimg>     background image for ROI
             -mni                  ROI is defined in MNI space
+            -subj                 use the highres transformations instead of standard
             -nt                   do not apply coordinate transformation (to safe time)
             -pfx <pfxhd> <pfxln>  print this string prior the roi statistics
             -keep                 don't delete temporary files when finished
@@ -113,6 +114,8 @@ prestr=""
 prehd=""
 mnistr=""
 
+reftrans="standard"
+
 while [ $# -gt 0 ] ;
 do
     case $1 in
@@ -168,6 +171,9 @@ do
                 do_mni=1
                 shift
                 ;;
+        -subj)  reftrans="highres"
+                shift
+                ;;
           -nt)  do_trans=0
                 shift
                 ;;
@@ -205,18 +211,18 @@ mkdir -p $fodir
 # get the transformation
 if [ $get_mat -eq 1 ]
 then
-    if [ $(imtest ${featdir}/reg/standard2example_func_warp) -eq 1 ]
+    if [ $(imtest ${featdir}/reg/${reftrans}2example_func_warp) -eq 1 ]
     then
-        matfl=${featdir}/reg/standard2example_func_warp
-    elif [ $(imtest ${featdir}/reg/example_func2standard_warp) -eq 1 ]
+        matfl=${featdir}/reg/${reftrans}2example_func_warp
+    elif [ $(imtest ${featdir}/reg/example_func2${reftrans}_warp) -eq 1 ]
     then
-        invwarp -w ${featdir}/reg/example_func2standard_warp -o ${featdir}/reg/standard2example_func_warp -r ${featdir}/reg/example_func
-        matfl=${featdir}/reg/standard2example_func_warp
-    elif [ -e ${featdir}/reg/standard2example_func.mat ]
+        invwarp -w ${featdir}/reg/example_func2${reftrans}_warp -o ${featdir}/reg/${reftrans}2example_func_warp -r ${featdir}/reg/example_func
+        matfl=${featdir}/reg/${reftrans}2example_func_warp
+    elif [ -e ${featdir}/reg/${reftrans}2example_func.mat ]
     then
-        matfl=${featdir}/reg/standard2example_func.mat
+        matfl=${featdir}/reg/${reftrans}2example_func.mat
     else
-        echo "ERROR: No transformation to standard found in this directory!"
+        echo "ERROR: No transformation to ${reftrans} found in this directory!"
         echo "       ${featdir}/reg"
         exit 0
     fi
@@ -242,6 +248,9 @@ else
     convert_xfm -omat $tmpdir/invmat -inverse $matfl
 fi
 imatfl=$tmpdir/invmat
+
+cp $matfl $fodir/invmat.mat
+cp $matfl $fodir/matfl.mat
 
 fslmaths $fodir/roi -thr 0.5 -bin -mul ${featdir}/mask $fodir/roithr -odt char # this threshold assumes an interpolation of a binary mask
 immv $fodir/roithr $fodir/roi

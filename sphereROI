@@ -16,6 +16,7 @@ cat << EOF
 
         create a spherical sphere with given radius centered at the voxel
         specified by coor as 'x y z'
+        If radius is 0, only a single voxel is selected.
 
         see: https://www.jiscmail.ac.uk/cgi-bin/webadmin?A2=FSL;6ce4bff3.1301
 
@@ -77,7 +78,7 @@ mkdir $tmpdir;
 while [ $# -gt 0 ] ;
 do
     case $1 in
-          -o)   onm=$1
+          -o)   onm=$2
                 shift 2
                 ;;
           -f)   do_mean=1
@@ -85,10 +86,10 @@ do
                 krnlstr="-fmean"
                 shift
                 ;;
-        -ref)   refimg=$1
+        -ref)   refimg=$2
                 shift 2
                 ;;
-       -trgt)   trgtimg=$1
+       -trgt)   trgtimg=$2
                 got_trgt=1
                 shift 2
                 ;;
@@ -96,15 +97,15 @@ do
                 dimstr="-mm"
                 shift
                 ;;
-        -mat)   transstr="$transstr -xfm $1"
+        -mat)   transstr="$transstr -xfm $2"
                 do_trans=1
                 shift 2
                 ;;
-       -warp)   transstr="$transstr -warp $1"
+       -warp)   transstr="$transstr -warp $2"
                 do_trans=1
                 shift 2
                 ;;
-     -premat)   transstr="$transstr -premat $1"
+     -premat)   transstr="$transstr -premat $2"
                 do_trans=1
                 shift 2
                 ;;
@@ -122,17 +123,15 @@ done
 
 #__________________________________________________________________________________________#
 
+
+vc="${coorX} ${coorY} ${coorZ}"
+
 if [ $do_mm -eq 1 ]
 then
     vc=$(echo "${coorX} ${coorY} ${coorZ}" | std2imgcoord -img $refimg -std $refimg -vox -)
-    coorX=$(echo "$vc" | sed -e 's/  / /g' | cut -d' ' -f1)
-    coorY=$(echo "$vc" | sed -e 's/  / /g' | cut -d' ' -f2)
-    coorZ=$(echo "$vc" | sed -e 's/  / /g' | cut -d' ' -f3)
 
-    echo "ROI centered at Voxel: ${coorX} ${coorY} ${coorZ}"
+    echo "ROI centered at Voxel: $vc"
 fi
-
-vc="${coorX} ${coorY} ${coorZ}"
 
 if [ $do_trans -eq 1 ]
 then
@@ -144,20 +143,27 @@ then
         vc=$(echo "${vc}" | std2imgcoord -img $refimg $transstr $dimstr -)
     fi
 elif [ $do_mm -eq 1 ]
+then
     vc=$(echo "${vc}" | std2imgcoord -img $refimg -std $refimg -vox -)
 fi
 
-coorX=$(echo "$vc" | sed -e 's/  / /g' | cut -d' ' -f1 | xargs printf "%1.0f")
-coorY=$(echo "$vc" | sed -e 's/  / /g' | cut -d' ' -f2 | xargs printf "%1.0f")
-coorZ=$(echo "$vc" | sed -e 's/  / /g' | cut -d' ' -f3 | xargs printf "%1.0f")
-
+coorX=$(echo "$vc" | sed -e 's/   / /g' | sed -e 's/  / /g' | cut -d' ' -f1 | xargs printf "%1.0f")
+coorY=$(echo "$vc" | sed -e 's/   / /g' | sed -e 's/  / /g' | cut -d' ' -f2 | xargs printf "%1.0f")
+coorZ=$(echo "$vc" | sed -e 's/   / /g' | sed -e 's/  / /g' | cut -d' ' -f3 | xargs printf "%1.0f")
 
 if [ $got_trgt -eq 0 ]
 then
     trgtimg=$refimg
 fi
 
-fslmaths $refimg -mul 0 -add 1 -roi ${coorX} 1 ${coorY} 1 ${coorZ} 1 0 1 -kernel sphere $radius $krnlstr $onm $otstr
+if [ $radius -gt 0 ]
+then
+    expstr=" -kernel sphere $radius $krnlstr"
+else
+    expstr=""
+fi
+
+fslmaths $refimg -mul 0 -add 1 -roi ${coorX} 1 ${coorY} 1 ${coorZ} 1 0 1 $expstr $onm $otstr
 
 if [ $do_mean -eq 1 ]
 then

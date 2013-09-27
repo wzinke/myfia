@@ -1,0 +1,100 @@
+#!/bin/bash
+#
+# coor2mask
+#
+# created: 27.9.2013
+# by zinke
+#
+
+Usage() {
+cat << EOF
+
+    Usage: $0 <coor> [options]
+
+        creates a mask from a set of voxel coordinates specified in a text file.
+        Each row of the input file should specify a voxel coordinate as x y z.
+
+    OPTIONS:
+            -o      name of the mask file
+            -ref    reference image to define the image space.
+                    As default, 2mm MNI space is assumed.
+            -rad    Expand voxels to a sphere of given radius.
+            -p      create png image showing the ROI location
+
+            ###########################################################
+            ##   (c) wolf zinke (2013) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+EOF
+exit 1
+
+}
+
+if [ $# -eq 0 ]
+then
+    Usage
+else
+    coor=$1
+    shift 
+fi
+
+#__________________________________________________________________________________________#
+
+onm=VXLmask
+refimg=$FSLDIR/data/standard/MNI152_T1_2mm_brain
+
+rad=0
+do_plot=0
+
+tmpdir=`tmpnam tmpSphere`
+rm $tmpdir
+mkdir $tmpdir;
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+          -o)   onm=$2
+                shift 2
+                ;;
+        -ref)   refimg=$2
+                shift 2
+                ;;
+        -rad)   rad=$2
+                shift
+                ;;
+          -p)   do_plot=1
+                shift
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+#__________________________________________________________________________________________#
+
+
+fslmaths $refimg -mul 0 $tmpdir/maskimg
+
+cnt=0
+while read line
+do
+    cnt=$(($cnt+1))
+    sphereROI $line $rad -ref $refimg -o $tmpdir/croi_$cnt
+    fslmaths $tmpdir/maskimg -add $tmpdir/croi_$cnt $tmpdir/maskimg
+done < $coor
+
+fslmaths $tmpdir/maskimg -bin $onm -odt char
+
+if [ $do_plot -eq 1 ]
+then
+    vol_slicer $refimg -stat $onm -thick -s 2 -cog -statrng 0.5 4 -out $onm.png
+fi
+
+
+rm -r $tmpdir

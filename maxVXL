@@ -1,0 +1,94 @@
+#!/bin/bash
+#
+# maxVXL
+#
+# created: 27.9.2013
+# by zinke
+#
+
+Usage() {
+cat << EOF
+
+    Usage: maxVXL <infl> [options]
+
+    OPTIONS:
+            -m      preselct voxels with this mask image
+            -p      threshold voxels at this percentile value (0-100)
+                    default: -p 90
+            -n      select the <n> maximal voxels
+            -r      select the <r> percent maximal voxel
+            -o      name of the mask containing selected voxels
+            -keep   do not delete temporay files
+
+            ###########################################################
+            ##   (c) wolf zinke (2011) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+
+EOF
+exit 1
+
+}
+
+
+if [ $# -eq 0 ]; then
+    Usage
+else
+    infl=`remove_ext $1`
+    shift
+fi
+
+#__________________________________________________________________________________________#
+tmpdir=`tmpnam tmp_vxlsel`
+rm $tmpdir
+mkdir $tmpdir
+
+
+keep_tmp=0
+ofl="${infl}_sel"
+seltyp="p"
+thr=90
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+          -o)   ofl=$2
+                shift 2
+                ;;
+          -p)   thr=$2
+                seltyp="p"
+                shift 2
+                ;;
+          -n)   thr=$2
+                seltyp="n"
+                ;;
+          -r)   thr=$2
+                seltyp="r"
+                ;;
+          -m)   thr=$2
+                seltyp="r"
+                ;;
+        -keep)  keep_tmp=1
+                shift
+                ;;
+          -*)   Wrong option: <$1>"
+                "
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+#__________________________________________________________________________________________#
+
+
+
+
+
+if [ $keep_tmp -eq 0 ]
+then
+    rm -r $tmpdir
+fi
