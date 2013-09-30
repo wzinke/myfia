@@ -9,7 +9,7 @@
 Usage() {
 cat << EOF
 
-    Usage: maxVXL <infl> [options]
+    Usage: maxVXL <fllst> [options]
 
     OPTIONS:
             -m      preselct voxels with this mask image
@@ -17,11 +17,14 @@ cat << EOF
                     default: -p 90
             -n      select the <n> maximal voxels
             -r      select the <r> percent maximal voxel
+            -max    determines the maximum value for a 4D data set
+            -mean   determines the mean value for a 4D data set (default)
+            -med    determines the median value for a 4D data set
             -o      name of the mask containing selected voxels
             -keep   do not delete temporay files
 
             ###########################################################
-            ##   (c) wolf zinke (2011) - part of the MaFIA toolbox   ##
+            ##   (c) wolf zinke (2013) - part of the MaFIA toolbox   ##
             ##         > MAcaque Functional Image Analysis <         ##
             ##            Licensed under the MIT license             ##
             ###########################################################
@@ -32,11 +35,13 @@ exit 1
 
 }
 
+# TODO: add a cluster option, that selects the largest cluster of conected voxels as ROI
+
 
 if [ $# -eq 0 ]; then
     Usage
 else
-    infl=`remove_ext $1`
+    infl="$1"
     shift
 fi
 
@@ -45,11 +50,13 @@ tmpdir=`tmpnam tmp_vxlsel`
 rm $tmpdir
 mkdir $tmpdir
 
-
 keep_tmp=0
-ofl="${infl}_sel"
+ofl="MaxVxl"
 seltyp="p"
 thr=90
+meanstr="-Tmean"
+maskstr=""
+maskstat=""
 
 while [ $# -gt 0 ] ;
 do
@@ -63,12 +70,25 @@ do
                 ;;
           -n)   thr=$2
                 seltyp="n"
+                shift 2
                 ;;
           -r)   thr=$2
                 seltyp="r"
+                shift 2
                 ;;
-          -m)   thr=$2
-                seltyp="r"
+          -m)   maskstr="-mas $2"
+                maskstat="-k $2"
+                maskts="-m $2" # bloody FSL, three functions, three different specifications...
+                shift 2
+                ;;
+        -max)   meanstr="-Tmax"
+                shift
+                ;;
+        -med)   meanstr="-Tmedian"
+                shift
+                ;;
+        -mean)  meanstr="-Tmean"
+                shift
                 ;;
         -keep)  keep_tmp=1
                 shift
@@ -84,9 +104,33 @@ done
 
 #__________________________________________________________________________________________#
 
+fslmerge -t $tmpdir/invals $infl
+
+if [ $(fslnvols $tmpdir/invals) -eq 1 ]
+then
+    meanstr=""
+fi
+
+fslmaths $tmpdir/invals $maskstr $meanstr $tmpdir/invals_msk
+
+ifl=$tmpdir/invals_msk
+
+if [ $seltyp == 'p' ]
+then
+    pthr=$(fslstats $ifl $maskstat -p $thr)
+    fslmaths $ifl -thr $pthr $ofl -odt char
+else
+    fslmeants -i $ifl $maskts --showall --transpose -o $tmpdir/vxllst.dat
+
+    srcpath=`dirname $(which $0)`
+
+    echo "source('$srcpath/get_maxvxl.r'); get_maxvxl('$tmpdir/vxllst.dat', '$tmpdir/maxvxl.dat',$thr, tp='$seltyp'); q();" | R --vanilla --slave
+
+    coor2mask $tmpdir/maxvxl.dat $tmpdir/invals_msk -o $ofl
+fi
 
 
-
+#__________________________________________________________________________________________#
 
 if [ $keep_tmp -eq 0 ]
 then
