@@ -11,7 +11,10 @@ if [ $# -lt 1 ] ; then
 
     exit
 else
-  str=`echo "ccalc -eval '$1 * sqrt(8*log(2))'"`
-  eval "$str"
+#   str=`echo "ccalc -eval '$1 * sqrt(8*log(2))'"`
+#   eval "$str"
+
+  octcalc "$1 * sqrt(8*log(2))"
+
 fi
 
