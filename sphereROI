@@ -63,7 +63,6 @@ refimg=$FSLDIR/data/standard/MNI152_T1_2mm_brain
 otstr="-odt char"
 krnlstr="-dilF"
 
-
 do_mm=0
 do_plot=0
 do_trans=0

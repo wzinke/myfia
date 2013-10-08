@@ -19,7 +19,8 @@ cat << EOF
             -dirpath <dirname>    root output directory (default: <featdir>)
             -thr     <thr>        use only voxel above this absolute threshold
             -thrP    <thr%>       use only voxel above this relative threshold
-            -roiThr  <thr>        threshold the ROI mask at this absolute value.
+            -thrmask <thr>        use this mask to select voxels within the ROI
+            -mthr    <thr>        threshold the ROI mask at this absolute value.
             -perc                 convert to percent signal change (whatever this is, NIY!)
             -mat     <matfl>      use this transformation matrix\warpfield
             -imat    <matfl>      Invert this transformation matrix\warpfield
@@ -147,7 +148,18 @@ do
                 fi
                 shift 2
                 ;;
-      -roiThr)  mthrstr="-thr $2"
+    -thrmask)   if [ $got_thr -eq 1 ]
+                then
+                    echo "Only one threshold option can be used, all subsequent uses are ignored!"
+                    return 0
+                else
+                    got_thr=1
+                    thropt="m"
+                    thrval=$2
+                fi
+                shift 2
+                ;;
+        -mthr)  mthrstr="-thr $2"
                 shift 2
                 ;;
          -mat)  get_mat=0
@@ -238,27 +250,74 @@ then
 fi
 
 # transform roi mask into native space
+
+# apply slight smoothing to avoid loss of voxels
+# if [ "$(fslval $roi pixdim1)" -lt "$(fslval $roi pixdim3)" ]  # assume isometric inplane resolution
+# then
+#     vxlsz=$(fslval $roi pixdim3)
+# else
+#     vxlsz=$(fslval $roi pixdim1)
+# fi
+
+vxlsz=$(octcalc "median([$(fslval ${featdir}/example_func pixdim1), $(fslval ${featdir}/example_func pixdim2), $(fslval ${featdir}/example_func pixdim3)])")
+
+fslmaths $roi -s $(fwhm2sigma $vxlsz) $tmpdir/smroi
+
+if [ $thropt == 'm' ]
+then
+    fslmaths $thrval -s $(fwhm2sigma $vxlsz) $tmpdir/thrmask
+fi
+
 if [ $(imtest $matfl) -eq 1 ]
 then
-    applywarp --ref=${featdir}/example_func --in=$roi --out=$fodir/roi --warp=$matfl
+    applywarp --ref=${featdir}/example_func --in=$tmpdir/smroi --out=$fodir/roi --warp=$matfl --interp=trilinear
     invwarp -w $matfl -o $tmpdir/invmat -r $roi
+    imcp $matfl $fodir/invmat
+    imcp $matfl $fodir/matfl
 
+    if [ $thropt == 'm' ]
+    then
+        applywarp --ref=${featdir}/example_func --in=$tmpdir/thrmask --out=$fodir/roithrmask --warp=$matfl --interp=trilinear
+    fi
 else
-    flirt -in $roi -ref ${featdir}/example_func -out $fodir/roi -applyxfm -init $matfl
+    flirt -in $tmpdir/smroi -ref ${featdir}/example_func -out $fodir/roi -applyxfm -init $matfl -interp trilinear
     convert_xfm -omat $tmpdir/invmat -inverse $matfl
+    cp $matfl $fodir/invmat
+    cp $matfl $fodir/matfl
+
+    if [ $thropt == 'm' ]
+    then
+        flirt -in $tmpdir/thrmask -ref ${featdir}/example_func -out $fodir/roithrmask -applyxfm -init $matfl -interp trilinear -interp trilinear
+    fi
 fi
 imatfl=$tmpdir/invmat
 
-cp $matfl $fodir/invmat.mat
-cp $matfl $fodir/matfl.mat
+fslmaths $fodir/roi -thr 0.25 -bin -mul ${featdir}/mask $fodir/roithr -odt char
 
-fslmaths $fodir/roi -thr 0.5 -bin -mul ${featdir}/mask $fodir/roithr -odt char # this threshold assumes an interpolation of a binary mask
+if [ $thropt == 'm' ]
+then
+    fslmaths $fodir/roithrmask -thr 0.25 -bin $fodir/roithrmask -odt char
+    fslmaths $fodir/roithrmask -mul 2 -add $fodir/roi $tmpdir/plotroi_func
+    plroiF="$tmpdir/plotroi_func"
+
+    if [ $do_back -eq 1 ]
+    then
+        fslmaths $thrval -mul 2 -add $roi $tmpdir/plotroi
+        plroi="$tmpdir/plotroi"
+    fi
+else
+    plroiF="$fodir/roi"
+    plroi="$roi"
+fi
+
 immv $fodir/roithr $fodir/roi
 
-vol_slicer ${featdir}/example_func -stat $fodir/roi -thick -s 2 -cog -statrng 0.5 4 -out $fodir/roi.png
+# create images representing the ROI in functional and reference space
+vol_slicer ${featdir}/example_func -stat $plroiF -thick -s 2 -cog -statrng 0.75 2.5 -out $fodir/roi.png
+
 if [ $do_back -eq 1 ]
 then
-    vol_slicer $bckimg -stat $roi -thick -s 2 -cog -statrng 0.5 4 -out $fodir/roi_hr.png
+    vol_slicer $bckimg -stat $plroi -thick -s 2 -cog -statrng 0.75 2.5 -out $fodir/roi_hr.png
     chkreg ${featdir}/example_func $bckimg $imatfl  $fodir/reg_check.png
 fi
 
@@ -295,6 +354,10 @@ do
     if [ $thropt == "0" ]
     then
         cmask="$fodir/roi"
+    elif [ $thropt == 'm' ]
+    then
+#         fslmaths $fodir/roi -mas $fodir/roithrmask -bin $fodir/cope${ccope}_mask -odt char
+        cmask="$fodir/roithrmask"
     else
         case $thropt in
             "a")  cthr=$thrval
@@ -362,8 +425,6 @@ do
         fi
     fi
     echo ""  >> $fodir/roi_tbl.dat
-
-    # create summary statistics via R?
 done
 
 #__________________________________________________________________________________________#
