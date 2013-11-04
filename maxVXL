@@ -13,11 +13,15 @@ cat << EOF
 
     OPTIONS:
             -m      preselct voxels with this mask image
+            -mthr   apply this threshold to the mask image
             -p      threshold voxels at this percentile value (0-100)
                     default: -p 90
             -n      select the <n> maximal voxels
             -r      select the <r> percent maximal voxel
+            -iv     select minimal instead of maximal voxel intensities
+            -kc     keep constant and/or zero values
             -max    determines the maximum value for a 4D data set
+            -min    determines the minimum value for a 4D data set
             -mean   determines the mean value for a 4D data set (default)
             -med    determines the median value for a 4D data set
             -o      name of the mask containing selected voxels
@@ -51,12 +55,17 @@ rm $tmpdir
 mkdir $tmpdir
 
 keep_tmp=0
+
 ofl="MaxVxl"
 seltyp="p"
 thr=90
 meanstr="-Tmean"
 maskstr=""
 maskstat=""
+do_min=0
+do_mask=0
+mthr=""
+rmconst="-mas $tmpdir/valmask"
 
 while [ $# -gt 0 ] ;
 do
@@ -76,12 +85,20 @@ do
                 seltyp="r"
                 shift 2
                 ;;
-          -m)   maskstr="-mas $2"
-                maskstat="-k $2"
-                maskts="-m $2" # bloody FSL inconsistencies, three functions, three different mask specifications...
+          -m)   do_mask=1
+                maskimg=$2
+                shift 2
+                ;;
+         -kc)   rmconst=""
+                shift
+                ;;
+       -mthr)   mthr="-thr $2"
                 shift 2
                 ;;
         -max)   meanstr="-Tmax"
+                shift
+                ;;
+        -min)   meanstr="-Tmin"
                 shift
                 ;;
         -med)   meanstr="-Tmedian"
@@ -90,7 +107,11 @@ do
         -mean)  meanstr="-Tmean"
                 shift
                 ;;
+         -iv)   do_min=1
+                shift
+                ;;
         -keep)  keep_tmp=1
+                echo "tmp dir: $tmpdir"
                 shift
                 ;;
           -*)   Wrong option: <$1>"
@@ -102,31 +123,69 @@ do
     esac
 done
 
+mkdir -p $(dirname $ofl)
+
+# echo "writing $ofl with selection type '$seltyp' at threshold $thr using $meanstr"
+
 #__________________________________________________________________________________________#
+
+if [ $do_mask -eq 1 ]
+then
+    fslmaths $maskimg $mthr -bin $tmpdir/maskimg -odt char
+    maskstr="-mas $tmpdir/maskimg"
+    maskstat="-k  $tmpdir/maskimg"
+    maskts="-m    $tmpdir/maskimg" # bloody FSL, three functions, three different specifications...
+fi
 
 fslmerge -t $tmpdir/invals $infl
 
 if [ $(fslnvols $tmpdir/invals) -eq 1 ]
 then
     meanstr=""
+    fslmaths $tmpdir/invals -abs -thr 0 -bin -fillh $tmpdir/valmask -odt char
+else
+    fslmaths $tmpdir/invals -Tmin $tmpdir/minvals
+    fslmaths $tmpdir/invals -Tmax $tmpdir/maxvals
+
+    fslmaths $tmpdir/maxvals -sub $tmpdir/minvals -thr 0 -bin -fillh $tmpdir/valmask -odt char
 fi
 
-fslmaths $tmpdir/invals $maskstr $meanstr $tmpdir/invals_msk
+fslmaths $tmpdir/invals $maskstr $rmconst $meanstr $tmpdir/invals_msk
 
 ifl=$tmpdir/invals_msk
 
 if [ $seltyp == 'p' ]
 then
-    pthr=$(fslstats $ifl $maskstat -p $thr)
-    fslmaths $ifl -thr $pthr $ofl -odt char
+    if [ $do_min -eq 0 ]
+    then
+        pthr=$(fslstats $ifl $maskstat -p $thr)
+        fslmaths $ifl -thr $pthr $ofl -odt char
+    else
+        thr=$(echo "100 - $thr" | bc -l)
+        pthr=$(fslstats $ifl $maskstat -p $thr)
+        fslmaths $ifl -uthr $pthr $ofl -odt char
+    fi
 else
     fslmeants -i $ifl $maskts --showall --transpose -o $tmpdir/vxllst.dat
 
     srcpath=`dirname $(which $0)`
 
-    echo "source('$srcpath/get_maxvxl.r'); get_maxvxl('$tmpdir/vxllst.dat', '$tmpdir/maxvxl.dat',$thr, tp='$seltyp'); q();" | R --vanilla --slave
+    if [ $do_min -eq 0 ]
+    then
+        cat $tmpdir/vxllst.dat | sed -e 's/  / /g' | sort -k4 -n -r > $tmpdir/vxllst_srt.dat
+    else
+        cat $tmpdir/vxllst.dat | sed -e 's/  / /g' | sort -k4 -n    > $tmpdir/vxllst_srt.dat
+    fi
 
-    coor2mask $tmpdir/maxvxl.dat $tmpdir/invals_msk -o $ofl
+    if [ $seltyp == 'r' ]
+    then
+        nv=$(fslstats $ifl $maskstat -V | cut -d' ' -f1)
+        thr=$(echo "$thr * $nv / 100"   | bc -l | xargs printf "%1.0f")
+    fi
+
+    head -n $thr $tmpdir/vxllst_srt.dat | cut -d" " -f1-3 > $tmpdir/maxvxl.dat
+
+    coor2mask $tmpdir/maxvxl.dat -ref $tmpdir/invals_msk -o $ofl
 fi
 
 #__________________________________________________________________________________________#

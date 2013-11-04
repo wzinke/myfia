@@ -41,7 +41,8 @@ ofl=`tmpnam`
 
 # errmsg=`echo "addpath('/DATA/MAFIA/matlab/fmri'); mnic = tal2mni([$xc $yc $zc]);         dlmwrite('$ofl', mnic, ' '); exit;" | matlab -nojvm -nodisplay -nosplash`
 
-rtpath=$(which $0)
+rtpath=$(dirname `which $0`)
+echo $rtpath
 
 errmsg=`echo "addpath('$rtpath'); mnic = tal2icbm_fsl([$xc $yc $zc]); dlmwrite('$ofl', mnic, ' '); exit;" | matlab -nojvm -nodisplay -nosplash`
 

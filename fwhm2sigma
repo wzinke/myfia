@@ -1,0 +1,23 @@
+#!/bin/bash
+#
+# function requires ccalc provided by the AFNI package
+#
+
+if [ $# -lt 1 ] ; then
+    echo ''
+    echo 'Usage: fwhm2sigma <fwhm>'
+    echo '       calculates the sigma of a gaussian kernel for a given FWHM'
+    echo '       '
+
+    exit
+else
+#   str=`echo "ccalc -eval '$1 / sqrt(8*log(2))'"`
+#   eval "$str"
+
+  octcalc "$1/sqrt(8*log(2))"
+
+fi
+
+
+
+
