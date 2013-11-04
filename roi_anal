@@ -354,7 +354,6 @@ do
             echo -n "  $(fslstats ${featdir}/stats/cope${ccope}  -k $cmask -x | img2stdcoord -img ${featdir}/example_func -std $bckimg -warp $imatfl -vox -)" >> $fodir/roi_tbl.dat
             echo -n "  $(fslstats ${featdir}/stats/pe${ccope}  -k $cmask -x | img2stdcoord -img ${featdir}/example_func -std $bckimg -warp $imatfl -vox -)" >> $fodir/roi_tbl.dat
             echo -n "  $(fslstats ${featdir}/stats/zstat${ccope}  -k $cmask -x | img2stdcoord -img ${featdir}/example_func -std $bckimg -warp $imatfl -vox -)" >> $fodir/roi_tbl.dat
-
         else
             echo -n "  $(fslstats ${featdir}/stats/cope${ccope}  -k $cmask -x | img2stdcoord -img ${featdir}/example_func -std $bckimg -xfm $imatfl -vox -)" >> $fodir/roi_tbl.dat
             echo -n "  $(fslstats ${featdir}/stats/pe${ccope}  -k $cmask -x | img2stdcoord -img ${featdir}/example_func -std $bckimg -xfm $imatfl -vox -)" >> $fodir/roi_tbl.dat

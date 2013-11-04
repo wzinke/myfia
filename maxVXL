@@ -78,7 +78,7 @@ do
                 ;;
           -m)   maskstr="-mas $2"
                 maskstat="-k $2"
-                maskts="-m $2" # bloody FSL, three functions, three different specifications...
+                maskts="-m $2" # bloody FSL inconsistencies, three functions, three different mask specifications...
                 shift 2
                 ;;
         -max)   meanstr="-Tmax"
@@ -128,7 +128,6 @@ else
 
     coor2mask $tmpdir/maxvxl.dat $tmpdir/invals_msk -o $ofl
 fi
-
 
 #__________________________________________________________________________________________#
 
