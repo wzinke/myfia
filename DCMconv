@@ -1,0 +1,174 @@
+#!/bin/bash
+#
+# DCMconv
+#
+# created: 09.08.2013
+# by zinke
+#
+
+Usage() {
+cat << EOF
+
+    Usage: $0 <DCMsrc> <TRGTdir> [options]
+
+        convert dicom files into corresponding nifit files.
+        Inspired by a script of M. Hanke
+
+    OPTIONS:
+            -keep       do not delete temporary files
+
+            ###########################################################
+            ##   (c) wolf zinke (2013) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+EOF
+exit 1
+
+}
+
+# TODO: make naming of identifiers for anatomy and bold data more flexible
+#       (arguemnts for the mcverter -m option)
+# TODO: anonymize dicom files
+# TODO: implement different conversion tools and allow to switch between them
+# TODO: do some crude pre-alignment to standard mage orientations.
+# TODO: use multithreading for making nii.gz files
+
+if [ $# -lt 1 ]; then
+    Usage
+else
+    DCMsrc=$1
+    TRGTdir=$2
+    shift 2
+fi
+#__________________________________________________________________________________________#
+
+keep_tmp=0
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+        -keep)  keep_tmp=1
+                shift
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+tmpdir=`tmpnam tmpDCMCONV`
+rm $tmpdir
+mkdir $tmpdir
+mkdir $tmpdir/nifti
+
+#__________________________________________________________________________________________#
+
+csubj=$(basename $TRGTdir)
+
+mkdir -p $TRGTdir
+
+#__________________________________________________________________________________________#
+
+srcnm=$(basename $DCMsrc | cut -d. -f1 | cut -d_ -f2-)
+
+if [ "$(file $DCMsrc | grep archive | cut -d: -f1)" == "$DCMsrc" ] # not a directory but tar.gz fle
+then
+    echo "unpacking $(basename $DCMsrc)"
+    mkdir $tmpdir/unpackedDCM
+    tar -xf $DCMsrc -C $tmpdir/unpackedDCM
+    DCMsrc="$tmpdir/unpackedDCM"
+fi
+
+#__________________________________________________________________________________________#
+
+dcmdir=$(find $DCMsrc -mindepth 1 -type d | tail -n 1)
+
+echo "converting $dcmdir"
+
+# first kill all the MoCo reference volumes -- they confuse the converters
+for dcm in $dcmdir/*
+do
+    dcmdump $dcm 2>&1 | grep ImageComments | grep 'Reference volume' && rm $dcm && echo "removed MoCo reference" || true ;
+done
+
+# use the mcverter tool from MRIConvert
+mcverter -f fsl -d -n  -o $tmpdir/nifti $dcmdir
+
+# buggy mcverter always sorts into directories (even without -x)
+niilst=$(find $tmpdir/nifti -name *.nii)
+for cnii in $niilst
+do
+    cfl=$(basename $cnii)
+    gzip -n -c $cnii > $TRGTdir/${cfl}.gz
+    flstem=$(remove_ext $cnii)
+done
+
+mclst=$(find $tmpdir/nifti -name *.txt)
+for ctxt in $mclst
+do
+    cfl=$(basename $ctxt)
+    mv $ctxt $tmpdir/nifti/${cfl}
+done
+
+#__________________________________________________________________________________________#
+
+# anatlst=$(ls -1 $tmpdir/nifti/*MPRAGE*.nii.gz)
+# boldlst=$(ls -1 $tmpdir/nifti/*ep2d_bold*.nii.gz)
+#
+# for cfl in $anatlst
+# do
+#     if [ ! -e $TRGTdir/anatomy ]
+#     then
+#         mkdir $TRGTdir/anatomy
+#     fi
+#
+#     flstem=$(basename $cfl)
+#     flstem=$(remove_ext ${flstem})
+#     ofl=$(echo ${flstem} | cut -d_ -f2-)
+#     echo "processing anatomy data: ${flstem}"
+#
+#     fslreorient2std $cfl $TRGTdir/anatomy/${csubj}_${ofl}
+#
+#     # reduce image size
+#     bet $TRGTdir/anatomy/${csubj}_${ofl} $tmpdir/nifti/${flstem}_cbrain -R -f 0.5
+#
+#     flirt -in $tmpdir/nifti/${flstem}_cbrain -ref $FSLDIR/data/standard/MNI152_T1_2mm_brain -omat $tmpdir/nifti/${flstem}_coreg.mat -bins 256 -cost corratio -searchrx -10 10 -searchry -10 10 -searchrz -10 10 -dof 12  -interp trilinear
+#
+#     convert_xfm -omat $tmpdir/nifti/MNI2Subj.mat -inverse $tmpdir/nifti/${flstem}_coreg.mat
+#
+#     flirt -in $FSLDIR/data/standard/MNI152_T1_2mm -ref $TRGTdir/anatomy/${csubj}_${ofl} -init $tmpdir/nifti/MNI2Subj.mat -applyxfm -o  $tmpdir/nifti/MNIhead
+#
+#     fslmaths  $tmpdir/nifti/MNIhead -thrP 20  $tmpdir/nifti/MNIhead_thr
+#     roisz=$(fslstats $tmpdir/nifti/MNIhead_thr -l 0 -w)
+#
+#     fslroi $TRGTdir/anatomy/${csubj}_${ofl}  $TRGTdir/anatomy/${csubj}_${ofl}_co $roisz  # cropped anatomy
+# done
+#
+# cnt=1
+# for cfl in $boldlst
+# do
+#     cntstr=$(printf "%0*d\n" 2 $cnt)
+#     if [ ! -e $TRGTdir/run_$cntstr ]
+#     then
+#         mkdir $TRGTdir/run_$cntstr
+#     fi
+#
+#     flstem=$(remove_ext $flstem)
+#
+#     immv $cfl $TRGTdir/run_$cntstr/${csubj}_run_$cntstr
+#     cat $(remove_ext $cfl)_info.txt | grep -iv Subject > $TRGTdir/run_$cntstr/${csubj}_run_${cntstr}_info.txt
+#     cnt=$(($cnt+1))
+# done
+
+#__________________________________________________________________________________________#
+
+if [ $keep_tmp -eq 0 ]
+then
+    rm -r $tmpdir
+fi
+
