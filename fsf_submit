@@ -46,13 +46,13 @@ fi
 #__________________________________________________________________________________________#
 
 onm=allfsf.submit
-memusg=8000
+memusg=4000
 idir=`pwd`
 do_sub=0
 lp=4
 loc_flag=""
 do_loc=0
-msgstr="notification = Never"
+msgstr=""
 
 while [ $# -gt 0 ] ;
 do
@@ -73,7 +73,7 @@ do
                 do_loc=1
                 shift 2
                 ;;
-        -msg)   msgstr=""
+        -msg)   msgstr="-msg"
                 shift
                 ;;
           -*)   echo "Wrong option: <$1>"
@@ -90,6 +90,7 @@ done
 # test if directory or files
 if [[ -d $fsfdir ]]
 then
+    fsfdir=$(readlink -f  $fsfdir)
     fsflst=`ls -1 $fsfdir/*.fsf`
 elif [[ -f $fsfdir ]]
 then
@@ -105,39 +106,32 @@ then
 fi
 
 # create condor header
-echo "Executable = $FSLDIR/bin/feat
-Universe = vanilla
-initialdir = $idir
-request_cpus = 1
-request_memory = $memusg
-getenv = True
-$msgstr
-" > $onm
+condor_subhd $(which feat) -mem $memusg -ini  $idir    > $onm
 
 for cfsf in $fsflst
 do
 #     cstem=`echo "$cfsf" | basename | sed -e 's/.fsf//g'`
-    cstem=`basename "$cfsf" | sed -e 's/.fsf//g'`
+    cstem=$(basename "$cfsf" | sed -e 's/.fsf//g')
+    cdir=$(dirname "$cfsf")
 
-    if [[ ! "$1" = /* ]]
+#     if [[ ! "$1" = /* ]]
+    if [ "$cdir" == "." ]
     then
-        cfsf=`pwd`/$cfsf
+        cfsf=`pwd`/$cstem.fsf
     fi
 
-    echo "arguments = $cfsf" >> $onm
-    echo "error  = $idir/log/$cstem.e\$(Process)" >> $onm
-    echo "output = $idir/log/$cstem.o\$(Process)" >> $onm
-    echo "Queue" >> $onm
+    condor_addcmd "$cfsf" -log  $idir/log/${cstem} >> $onm
 done
 
 if [ $do_sub -eq 1 ]
 then
-    if [ $do_loc -eq 1 ]
-    then
-        condor_waitend $onm $loc_flag -go
-    else
-        condor_submit $onm
-    fi
+#     if [ $do_loc -eq 1 ]
+#     then
+#         condor_waitend $onm $loc_flag -go
+#     else
+#         condor_submit $onm
+#     fi
+    condor_waitend $onm $loc_flag -go
 fi
 
 

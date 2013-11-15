@@ -59,7 +59,7 @@ fl_dir=`pwd`
 odir=clust_thr
 prefix=''
 suffix=''
-matCLstr=""
+matCLstr="" # not active right now
 matstr=""
 fullout=0
 outstr=""
@@ -102,7 +102,7 @@ do
          -pf)   prefix=$2
                 shift 2
                 ;;
-        -mat)   #matCLstr="-x $2 --stdvol=$FSLDIR/data/standard/MNI152_T1_1mm_brain"
+        -mat)   # matCLstr="-x $2 --stdvol=$FSLDIR/data/standard/MNI152_T1_1mm_brain"
                 matstr="-mat $2"
                 shift 2
                 ;;
@@ -142,9 +142,6 @@ then
 fi
 
 printf "%24s %-10s %-8s %-8s %-8s %-10s %-8s %-8s %-8s \n" File Num_vxl p z num_active  minval maxval robmin robmax> $odir/p_info.dat
-# printf "%24s %-10s %-8s %-8s %-8s %-10s %-8s %-8s %-8s \n" File Num_vxl p z num_active minval maxval robmin robmax
-
-# zthr=`ptoz $pthr`
 
 if [ $get_mask -eq 0 ]
 then
@@ -153,20 +150,20 @@ fi
 
 for cfl in $fllst
 do
-    flnm=`basename $cfl`
-    flnm=`remove_ext $flnm`
-    onm=`echo $odir/${prefix}${flnm}${suffix}`
+    flnm=$(basename $cfl)
+    flnm=$(remove_ext $flnm)
+    onm=$(echo $odir/${prefix}${flnm}${suffix})
 
     if [ $get_mask -eq 1 ]
     then
         fslmaths $cfl -abs -bin $tmpdir/mask.nii.gz
     fi
 
-    num_vxl=`fslstats $tmpdir/mask.nii.gz -V | awk '{print $1}'`
+    num_vxl=$(fslstats $tmpdir/mask.nii.gz -V | awk '{print $1}')
 
     fslmaths $cfl -mas $tmpdir/mask.nii.gz $tmpdir/thresh_zmap
 
-    smnm="`remove_ext ${cfl}`_smoothness"
+    smnm="$(remove_ext ${cfl})_smoothness"
     if [ -e $smnm ]
     then
         SM=`cat $smnm`
@@ -183,13 +180,13 @@ do
         outstr=" --opvals=${onm}_pvals --olmax=${onm}_lmax.txt -o ${onm}_cluster_mask"
     fi
 
-    cluster -i $tmpdir/thresh_zmap -t $zthr -p $pthr -d $DLH --volume=$VOLUME --othresh=$onm --connectivity=$c --olmaxim=${onm}_lmax --mm $matCLstr $outstr > ${onm}_cluster.txt
+    cluster -i $tmpdir/thresh_zmap -t $zthr -p $pthr -d $DLH --volume=$VOLUME --othresh=$onm --connectivity=$c --olmaxim=${onm}_lmax --mm  --minclustersize $matCLstr $outstr > ${onm}_cluster.txt
 
     if [ $do_neg -eq 1 ]
     then
         if [ $fullout -eq 1 ]
         then
-            outstr=" --opvals=${onm}_neg_pvals -o $tmpdir/thresh_neg_cluster_mask --olmax=${onm}_neg_lmax.txt"
+            outstr=" --opvals=${onm}_neg_pvals --olmax=${onm}_neg_lmax.txt -o $tmpdir/thresh_neg_cluster_mask"
         fi
 
         fslmaths $tmpdir/thresh_zmap -mul -1 $tmpdir/inv_zmap
@@ -236,7 +233,6 @@ do
     fi
 
     printf "%24s %-10d %-8.6f %-8.6f %-10d %-8.4f %-8.4f %-8.4f %-8.4f \n" $flnm $num_vxl $pthr $zthr $num_active $minval $maxval $robminval $robmaxval >> $odir/p_info.dat
-#     printf "%24s %-10d %-8.6f %-8.6f %-10d %-8.4f %-8.4f %-8.4f %-8.4f \n" $flnm $num_vxl $pthr $zthr $num_active $minval $maxval $robminval $robmaxval
 done
 
 #__________________________________________________________________________________________#

@@ -31,10 +31,8 @@ cat << EOF
             ##   for comments and questions: wolfzinke@gmail.com     ##
             ##            Licensed under the MIT license             ##
             ###########################################################
-
 EOF
 exit 1
-
 }
 
 # BUG:  catch cases with no significant voxel
@@ -169,7 +167,7 @@ then
         cluster_thr -l "$flnm" -o $tmpdir -z $thr -p $pval $maskstr $mstr
         cltbl=$tmpdir/${flstem}_cluster.txt
     else
-        cluster -i $flnm -t $thr --mm --olmax=$tmpdir/locmax.dat  $mstr > $tmpdir/clusttbl.dat
+        cluster -i $flnm -t $thr --mm --minclustersize --olmax=$tmpdir/locmax.dat $mstr > $tmpdir/clusttbl.dat
         cltbl=$tmpdir/clusttbl.dat
     fi
 else
@@ -267,13 +265,6 @@ else
 fi
 
 eval "cat $tmpdir/mnitbl.dat $ostr"
-
-
-#
-# fi [ $do_lm -eq 1 ]
-# then
-#
-# fi
 
 #__________________________________________________________________________________________#
 

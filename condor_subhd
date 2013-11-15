@@ -18,6 +18,8 @@ cat << EOF
             -msg    send message when job is completed
             -o      filename of the submit file
             -sd     use shim_dmtcp for long lasting jobs
+            -p      run job with this priority
+            -nice   play nice - run only if others do not demand ressources
 
             ###########################################################
             ##   (c) wolf zinke (2013) - part of the MaFIA toolbox   ##
@@ -52,6 +54,8 @@ memuse=2000
 ostr=""
 do_shim=0
 msgstr="notification = Never"
+nice="False"
+prio=0
 
 while [ $# -gt 0 ] ;
 do
@@ -69,6 +73,12 @@ do
                 shift
                 ;;
          -sd)   do_shim=1
+                shift
+                ;;
+         -p)    prio=$2
+                shift 2
+                ;;
+       -nice)   nice="True"
                 shift
                 ;;
           -o)   ostr="> $2"
@@ -90,11 +100,6 @@ then
 
 echo "Executable = $execut
 Universe = vanilla
-initialdir = $inidir
-request_cpus = $ncpu
-request_memory = $memuse
-getenv = True
-$msgstr
 " $ostr
 
 else
@@ -109,10 +114,15 @@ error = \$(CLUSTER).\$(PROCESS).shimerr
 log = \$(CLUSTER).\$(PROCESS).log
 dmtcp_args = --log \$(CLUSTER).\$(PROCESS).shimlog --stdout \$(CLUSTER).\$(PROCESS).out --stderr \$(CLUSTER).\$(PROCESS).err
 dmtcp_env = DMTCP_TMPDIR=./;JALIB_STDERR_PATH=/dev/null;DMTCP_PREFIX_ID=\$(CLUSTER)_\$(PROCESS)
-initialdir = $inidir
-request_cpus = $ncpu
-request_memory = $memuse
-$msgstr
 " $ostr
 
 fi
+
+echo "initialdir = $inidir
+request_cpus = $ncpu
+request_memory = $memuse
+getenv = True
+priority = $prio
+nice_user = $nice
+$msgstr
+" $ostr

@@ -1,0 +1,321 @@
+#!/bin/bash
+#
+# designeff
+#
+# created: 14.04.2009
+# by zinke
+#
+
+Usage() {
+cat << EOF
+
+    Usage: $0 <fsf_fil> [options]
+
+    OPTIONS:
+            -noise      apply noise estimation
+            -thr		use intensity threshold for noise estimation (default: 10)
+            -lst        write information to list file
+            -ext        write extended output with additional information
+            -conf		include confoundfile as specified in fsf-file
+            -hp         calculates recommended HP cutoff period (with cutoffcalc, without confound data)
+            -hpLL       sets a lower limit for the cutoff period (default: 40)
+            -zval       set threshold for statistical significance (default: 5.3)
+            -ero        erode mask to avoid edge effects
+            -conffl		use extra file for confound information
+            -nomod      do not run feat_model (does suppress noise-option)
+            -id			use identifier for list
+            -idnm       name string uses as title for the identifier
+            -init       print titles for output data
+
+            ###########################################################
+            ##   (c) wolf zinke (2009) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##     for comments and questions: wolfzinke@gmx.net     ##
+            ###########################################################
+
+EOF
+exit 1
+
+}
+
+if [ $# -lt 1 ]; then
+    Usage
+else
+    fsffl=$1;
+    shift
+fi
+
+
+#__________________________________________________________________________________________#
+do_noise=0
+thr=10
+id=`cat $fsffl | grep 'set feat_files(1' | cut -d\" -f2`
+conf=0
+use_conf=0
+zval=5.3
+id=""
+idnm=""
+run_mod=1
+do_init=0
+write_lst=0
+ext_info=0
+need_id=0
+got_id=0
+conf_str=""
+erostr=""
+do_hp=0
+hpll=40
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+		-noise) do_noise=1
+		        shift
+		        ;;
+		-nomod) run_mod=0
+		        shift
+		        ;;
+        -thr)   thr=$2
+                do_thr=1
+                shift 2
+                ;;
+		-hp)    do_hp=1
+		        shift
+		        ;;
+        -hpLL)  hpll=$2
+                shift 2
+                ;;
+		-conf)  conf=1
+		        shift
+		        ;;
+		-init)  do_init=1
+		        shift
+		        ;;
+	  -conffl)  conffl=$2
+	            use_conf=1
+		        shift 2
+		        ;;
+		-zval)  zval=$2
+		        shift 2
+		        ;;
+	   	 -ero)  erostr="-ero"
+		        shift
+		        ;;
+		-id)    id="$2"
+		        need_id=1
+		        shift 2
+		        ;;
+	  -idnm)    idnm="$2"
+		        got_id=1
+		        need_id=0
+		        shift 2
+		        ;;
+		-lst)   lstfl=$2
+		        write_lst=1
+		        shift 2
+		        ;;
+		-ext)   ext_info=1
+		        shift
+		        ;;
+		  -*)   echo "Wrong option: <$1>"
+		        echo ""
+		        Usage
+		        ;;
+		   *)   break
+		        ;;
+    esac
+done
+
+#__________________________________________________________________________________________#
+if [ $need_id -eq 1 ]
+then
+    if [ $got_id -eq 0 ]
+    then
+        idnm=ID
+    fi
+fi
+
+if [ $run_mod -eq 0 ]
+then
+    do_noise=0
+fi
+
+#__________________________________________________________________________________________#
+if [ $do_noise -eq 1 ]  # perform noise estimation and include information in fsf file
+then
+	noise_opt=""
+	data_fl=`cat $fsffl | grep 'set feat_files(1' | cut -d\" -f2`
+
+	mask_fl=`cat $fsffl | grep 'set fmri(threshmask)' | cut -d\" -f2`
+	if [ -e $mask_fl ]
+	then
+		noise_opt="$noise_opt -mask $mask_fl"
+	fi
+
+	sp=`cat $fsffl | grep 'set fmri(smooth)' | cut -d " " -f3`
+	noise_opt="$noise_opt -sp $sp"
+
+	do_hp=`cat $fsffl | grep 'set fmri(temphp_yn)' | cut -d " " -f3`
+	if [ $do_hp -eq 1 ]
+	then
+		hp=`cat $fsffl | grep 'set fmri(paradigm_hp)' | cut -d " " -f3`
+		noise_opt="$noise_opt-hp $hp"
+	fi
+	donorm=`cat $fsffl | grep 'set fmri(norm_yn)' | cut -d " " -f3`
+	if [ $donorm -eq 1 ]
+	then
+		noise_opt="$noise_opt -norm"
+	fi
+	if [ $thr -gt 0 ]
+	then
+		noise_opt="$noise_opt -thr $thr"
+	fi
+
+#__________________________________________________________________________________________#
+	cnoise=`noise_est $data_fl $noise_opt $erostr`
+
+	noiseval=`echo "$cnoise" | awk '{print \$1}'`
+	ar1val=`  echo "$cnoise" | awk '{print \$2}'`
+
+	curr_input=`cat $fsffl | grep 'set fmri(noise)'`
+	noise_Xchng=`echo "sed -e 's/$curr_input/set fmri(noise) $noiseval/g' $fsffl > tmpfsf.dat"`
+	eval $noise_Xchng
+	mv tmpfsf.dat $fsffl
+
+	curr_input=`cat $fsffl | grep 'set fmri(noisear)'`
+	ar_Xchng=`echo "sed -e 's/$curr_input/set fmri(noisear) $ar1val/g' $fsffl > tmpfsf.dat"`
+	eval $ar_Xchng
+	mv tmpfsf.dat $fsffl
+
+	curr_input=`cat $fsffl | grep 'set fmri(critical_z)'`
+	ar_Xchng=`echo "sed -e 's/$curr_input/set fmri(critical_z) $zval/g' $fsffl > tmpfsf.dat"`
+	eval $ar_Xchng
+	mv tmpfsf.dat $fsffl
+fi
+
+#__________________________________________________________________________________________#
+if [ $do_hp -eq 1 ]
+then
+    tmpHPdir=`tmpnam tmp_HP_`
+    rm $tmpHPdir
+    TR=`cat $fsffl | grep 'set fmri(tr)' | cut -d " " -f3`
+    fsfbase=`basename $fsffl`
+    base_stem=`echo $fsfbase | cut -d. -f1`
+
+    mkdir $tmpHPdir
+    cp $fsffl $tmpHPdir/$fsfbase
+    cfl=$tmpHPdir/$fsfbase
+
+# inserted 3.5.2010: cutoffcalc requires a designfile with no filter applied (see FSL mailing list)
+    cln=`cat $cfl | grep 'set fmri(paradigm_hp)'`
+    hpxchng=`echo "sed -e 's/$cln/set fmri(paradigm_hp) 0/g' $cfl > ${cfl}_tmp"`
+    eval $hpxchng
+    mv ${cfl}_tmp $cfl
+
+    feat_model $tmpHPdir/$base_stem
+
+    hp_99=`cutoffcalc -t 0.99 --limit=$hpll --tr=$TR -i $tmpHPdir/$base_stem.mat`
+    hp_95=`cutoffcalc -t 0.95 --limit=$hpll --tr=$TR -i $tmpHPdir/$base_stem.mat`
+
+    rm -r $tmpHPdir
+
+    hpnm_str="hp_99   hp_95"
+    hpva_strl="$hp_99   $hp_95"
+else
+    hpnm_str=""
+    hpva_strl=""
+fi
+
+#__________________________________________________________________________________________#
+if [ $conf -eq 1 ]
+then
+	conf_fl=`cat $fsffl | grep 'set confoundev_files(1)' | cut -d\" -f2`
+	if [ -e $conf_fl ]
+	then
+		conf_str=$conf_fl
+	else
+		echo "WARNING: No confound-file found! - ($conf_fl)"
+	fi
+fi
+
+if [ $use_conf -eq 1 ]
+then
+    conf_str=$conffl
+fi
+
+#__________________________________________________________________________________________#
+
+fsf_stem=`basename $fsffl | cut -d. -f1`
+fsf_dir=` dirname  $fsffl`
+dsgnfl=$fsf_dir/$fsf_stem.con
+
+if [ $run_mod -eq 1 ]
+then
+    feat_model $fsf_dir/$fsf_stem $conf_str
+fi
+
+#__________________________________________________________________________________________#
+num_contr=`cat $dsgnfl | grep NumContrasts   | awk '{print $2}'`
+eff_lst=`  cat $dsgnfl | grep RequiredEffect | cut --delimiter=\t -f2`
+
+declare -a reqBOLD=($eff_lst)
+
+boldstr=""
+namestr=""
+cnt=0
+
+while [ $cnt -lt $num_contr ]
+do
+    boldstr=`echo -n "$boldstr ${reqBOLD[$cnt]} "`
+    cnt=$(($cnt+1))
+    cstr=`cat $dsgnfl | grep /ContrastName$cnt | head -1 | cut -f2`
+    namestr="$namestr '$cstr'"
+done
+
+if [ $ext_info -eq 0 ]
+then
+    if [ $do_noise -eq 1 ]  # perform noise estimation and include information in fsf file
+    then
+        titl_str="$idnm  tNoise  tAR1  $hpnm_str  $namestr"
+        val_str="$id  $cnoise  $hpva_strl  $boldstr"
+    else
+        titl_str="$idnm  $hpnm_str  $namestr"
+        val_str="$id  $hpva_strl  $boldstr"
+    fi
+else
+    sp=`   cat $fsffl | grep 'set fmri(smooth)'      | cut -d " " -f3`
+    hp=`   cat $fsffl | grep 'set fmri(paradigm_hp)' | cut -d " " -f3`
+    noise=`cat $fsffl | grep 'set fmri(noise)'       | cut -d " " -f3`
+    ar1=`  cat $fsffl | grep 'set fmri(noisear)'     | cut -d " " -f3`
+    zval=` cat $fsffl | grep 'set fmri(critical_z)'  | cut -d " " -f3`
+    tr=`   cat $fsffl | grep 'set fmri(tr)'          | cut -d " " -f3`
+    nvol=` cat $fsffl | grep 'set fmri(npts)'        | cut -d " " -f3`
+
+    titl_str="$idnm  TR  num_vol  spat_fwhm  HP_filt  tNoise  tAR1  zval  $hpnm_str  $namestr"
+    val_str="$id  $tr  $nvol  $sp  $hp  $noise  $ar1  $zval  $hpva_strl  $boldstr"
+fi
+
+#__________________________________________________________________________________________#
+if [ $write_lst -eq 1 ]
+then
+    if [ ! -e $lstfl ]
+    then
+        do_init=1
+    fi
+
+    if [ $do_init -eq 1 ]
+    then
+        echo "$titl_str" > $lstfl
+    fi
+    echo "$val_str" >> $lstfl
+else
+    if [ $do_init -eq 1 ]
+    then
+        echo "$titl_str"
+    fi
+    echo "$val_str"
+fi
+
+
+
+
