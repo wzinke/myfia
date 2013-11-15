@@ -17,7 +17,7 @@ import argparse
 ### get command line arguments
 
 parser = argparse.ArgumentParser(description='Run searchlight analysis on a data set.')
-parser.add_argument('ds',  help='data set')
+parser.add_argument('ds',  help='data set, single 4D file or list of 3D volumes ("flnm1 flnm2 flnm3")')
 parser.add_argument('-attr',  required=True, help='attribute file')
 parser.add_argument('-mask',  default=None, help='mask file')
 parser.add_argument('-nz',    action='store_false', default=True, help='No z-scoring of the data set')
@@ -53,9 +53,9 @@ from mvpa2.misc.plot.base       import plot_samples_distance
 
 # load two column text file specifying data attributes
 attr = SampleAttributes(cla.attr)
- 
+
 # load data set
-ds = fmri_dataset(cla.ds, targets=attr.targets, chunks=attr.chunks, mask=cla.mask)
+ds = fmri_dataset(cla.ds.split(), targets=attr.targets, chunks=attr.chunks, mask=cla.mask)
 
 # apply zsoring run-wise
 if cla.nz:
