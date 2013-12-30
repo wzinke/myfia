@@ -14,12 +14,13 @@ cat << EOF
             -ref        reference for coregistration (use a number or a file)
             -dof        degrees of freedom (default: 12 parameter affine transformation)
                         (numbers of transformation parameter, i.e. 3, 6, 7, 9 or 12)
-            -rot_tol    angle for all 3 axis that is used for the search (-rot_tol:rot_tol, default: 10)
+            -rot_tol    angle for all 3 axis that is used for the search (-rot_tol:rot_tol, default: 6)
             -cost       cost function (corratio,mutualinfo,normcorr,normmi,leastsq)
                         recommended: <corratio> for intra- and intermodal (default)
             -inmask     weighting mask for the input image, unless specified no weightning will be done
                         (use 'thr' or 'bet' as option)
             -refmask    weighting mask for the reference image, unless specified no weightning will be done
+            -thr        threshold level for masking (default: 15)
             -ip         interpolation (trilinear,nearestneighbour,sinc,spline); default: trilinear
             -sm         use smoothing with fwhm given here prior coregistration
             -final      coregister mean image of motion corrected series
@@ -42,7 +43,9 @@ EOF
 if [ $# -lt 1 ]; then
     Usage
 else
-    flnm=`remove_ext $1`;
+    flnm=$(remove_ext $1)
+    flpath=$(dirname $flnm)
+    flnm=$(basename $flnm)
     shift
 fi
 
@@ -53,7 +56,7 @@ fi
 #----------------------------------------------------------------------#
 # define default parameter
 mask_thr=15
-outnm=${flnm}_mc
+outnm=${flpath}/${flnm}_mc
 dof=12
 rot_tol=6
 do_inmask=0
@@ -69,7 +72,7 @@ do_rsmpl=0
 sm_fwhm=0
 do_hdr=0
 numiter=1
-betpar="-r 30 -f 0.4"
+betpar="-r 30 -f 0.35 -Z"
 searchtol="-nosearch"
 
 #----------------------------------------------------------------------#
@@ -101,6 +104,12 @@ do
                 ;;
       -rsmpl)   do_rsmpl=1
                 shift
+                ;;
+         -ip)   ip=$2
+                shift 2
+                ;;
+        -thr)   mask_thr=$2
+                shift 2
                 ;;
          -ip)   ip=$2
                 shift 2
@@ -144,7 +153,7 @@ mkdir $tmpdir;
 
 #----------------------------------------------------------------------#
 # split 4D into series of 3D volumes
-fslsplit $flnm $tmpdir/vol_ -t
+fslsplit ${flpath}/$flnm $tmpdir/vol_ -t
 
 #----------------------------------------------------------------------#
 # Get list of existing volumes
@@ -163,14 +172,19 @@ mkdir ${outnm}.mat
 # get the reference image
 reffl=${tmpdir}/ref
 refweight=${tmpdir}/refweight
+
 if [ $(imtest $ref) -eq 1 ]
 then
     echo "Using reference file: $ref"
     imcp $ref $reffl              # copy reference into temp directory
+elif [ "$ref" == "mean" ]
+then
+    echo "Using mean image as reference"
+  fsmaths ${flpath}/$flnm -Tmean $reffl
 else
     echo "Using reference volume # $ref"
 
-    fslroi $flnm $reffl $ref 1   # extract reference volume
+    fslroi ${flpath}/$flnm $reffl $ref 1   # extract reference volume
     if [ $sm_fwhm != 0 ]
     then
         krnl=`fwhm2sigma $sm_fwhm`
@@ -183,17 +197,18 @@ if [ $(imtest $refmask) -eq 1 ]
 then
         imcp $refmask $refweight
         imcp $refmask ${tmpdir}/refmask
-elseif [ $(imtest ${reffl}_mask) -eq 1 ]
-        imcp ${reffl}_mask $refweight
-        imcp ${reffl}_mask ${tmpdir}/refmask
+# elif [ $(imtest ${reffl}_mask) -eq 1 ]
+# then
+#         imcp ${reffl}_mask $refweight
+#         imcp ${reffl}_mask ${tmpdir}/refmask
 else
     case $refmask in
-        thr)    fslmaths $reffl -thrp $mask_thr $refweight
+        thr)    fslmaths $reffl -thrP $mask_thr -bin $refweight -odt char
                 ;;
-        bet)    bet $reffl ${reffl}_bet -o -m $betpar -R
+        bet)    bet $reffl ${reffl}_bet -R -o -m $betpar
                 immv ${reffl}_bet_mask $refweight
-                ;;
-            *)    echo "ERROR: Unknown option <$refmask> for reference weightning"
+                ;;                
+          *)    echo "ERROR: Unknown option <$refmask> for reference weightning"
                 exit 1
                 ;;
     esac
@@ -213,13 +228,12 @@ inweight=${tmpdir}/inmask
 flirt_fun_par=""
 
 flirt_fun_par="$flirt_fun_par -usesqform -cost $costfun -searchcost $costfun $searchtol"
-flirt_fun_par="$flirt_fun_par -dof $dof -coarsesearch 30 -finesearch 6"
+flirt_fun_par="$flirt_fun_par -dof $dof -coarsesearch 20 -finesearch 6"
 
 if [ $do_refmask -eq 1 ]
 then
     flirt_fun_par="$flirt_fun_par -refweight $refweight"
 fi
-
 
 #----------------------------------------------------------------------#
 # prepare the arguments for the image transformation
@@ -255,9 +269,11 @@ do
     if [ $do_inmask -eq 1 ]
     then
         case $inmask in
-            thr)    fslmaths ${tmpdir}/${curr_vol} -thrp $mask_thr $inweight
+            thr)    fslmaths ${tmpdir}/${curr_vol} -thrP $mask_thr -bin $inweight -odt char
+		    masksfx=$inweight
                     ;;
-            bet)    bet ${tmpdir}/${curr_vol} ${tmpdir}/${curr_vol}_bet -o -m $betpar -R
+            bet)    bet ${tmpdir}/${curr_vol} ${tmpdir}/${curr_vol}_bet -R -o -m $betpar
+		    masksfx=${tmpdir}/${curr_vol}_bet_mask
                     ;;
             *)      echo "ERROR: Unknown option <$inmask> for input weightning!"
                     exit
@@ -278,7 +294,7 @@ do
     echo ""
     echo "Iteration #$i:"
     echo "working on volume:"
-    mkdir ${tmpdir}/${outnm}_itr${i}.mat
+    mkdir ${tmpdir}/${flnm}_itr${i}.mat
 
     mc_lst=""
     matlst=""
@@ -297,36 +313,44 @@ do
             init_par=""
         else
             preitr=$(($i-1))
-            init_par="-init ${tmpdir}/${outnm}_itr${preitr}.mat/${curr_vol}"
+            init_par="-init ${tmpdir}/${flnm}_itr${preitr}.mat/${curr_vol}"
         fi
 
         if [ $do_inmask -eq 1 ]
         then
-            inmaskstr="-inweight ${tmpdir}/${curr_vol}_bet_mask"
+            inmaskstr="-inweight $masksfx"
         else
             inmaskstr=""
         fi
 
-        flirt -in ${tmpdir}/${curr_vol} -ref $Fref -omat ${tmpdir}/${outnm}_itr${i}.mat/${curr_vol} $flirt_fun_par $init_par $inmaskstr
+        flirt -in ${tmpdir}/${curr_vol} -ref $Fref -omat ${tmpdir}/${flnm}_itr${i}.mat/${curr_vol} $flirt_fun_par $init_par $inmaskstr
 
         if [ $do_rsmpl -eq 1 ]
         then
-            flirt -in ${tmpdir}/${curr_vol} -ref $reffl -o ${tmpdir}/mc_${curr_vol}_itr${i} -init ${tmpdir}/${outnm}_itr${i}.mat/${curr_vol} -applyxfm $trans_fun_par
+            flirt -in ${tmpdir}/${curr_vol} -ref $reffl -o ${tmpdir}/mc_${curr_vol}_itr${i} -init ${tmpdir}/${flnm}_itr${i}.mat/${curr_vol} -applyxfm $trans_fun_par
         else
-            flirt -in ${tmpdir}/${curr_vol} -ref ${tmpdir}/${curr_vol} -o ${tmpdir}/mc_${curr_vol}_itr${i} -init ${tmpdir}/${outnm}_itr${i}.mat/${curr_vol} -applyxfm $trans_fun_par
+            flirt -in ${tmpdir}/${curr_vol} -ref ${tmpdir}/${curr_vol} -o ${tmpdir}/mc_${curr_vol}_itr${i} -init ${tmpdir}/${flnm}_itr${i}.mat/${curr_vol} -applyxfm $trans_fun_par
         fi
 
         mc_lst="$mc_lst ${tmpdir}/mc_${curr_vol}_itr${i}"
-        matlst="$matlst ${tmpdir}/${outnm}_itr${i}.mat/${curr_vol}"
+        matlst="$matlst ${tmpdir}/${flnm}_itr${i}.mat/${curr_vol}"
     done
     echo " - done"
 
-    fslmerge -t ${tmpdir}/${outnm}_itr${i} $mc_lst
-    fslmaths    ${tmpdir}/${outnm}_itr${i} -Tmean ${tmpdir}/${outnm}_itr${i}_mean
+    fslmerge -t ${tmpdir}/${flnm}_itr${i} $mc_lst
+    fslmaths    ${tmpdir}/${flnm}_itr${i} -Tmean ${tmpdir}/${flnm}_itr${i}_mean
 
-    bet ${tmpdir}/${outnm}_itr${i}_mean ${tmpdir}/${outnm}_itr${i}_mean_bet -o -m $betpar -R
-    imcp ${tmpdir}/${outnm}_itr${i}_mean_bet_mask $refweight
-    Fref=${tmpdir}/${outnm}_itr${i}_mean
+    case $inmask in
+	thr)    fslmaths ${tmpdir}/${flnm}_itr${i}_mean -thrP $mask_thr -bin $refweight -odt char
+		;;
+	bet)    bet  ${tmpdir}/${flnm}_itr${i}_mean ${tmpdir}/${flnm}_itr${i}_mean_bet -R -o -m $betpar
+		imcp ${tmpdir}/${flnm}_itr${i}_mean_bet_mask $refweight
+		;;
+	*)      echo "ERROR: Unknown option <$inmask> for input weightning!"
+		exit
+		;;
+    esac
+    Fref=${tmpdir}/${flnm}_itr${i}_mean
 done
 
 echo " - done"
@@ -343,9 +367,9 @@ then
     then
         flirt_fun_par="$flirt_fun_par -refweight ${tmpdir}/refmask"
     fi
-    flirt_fun_par="$flirt_fun_par -inweight ${tmpdir}/${outnm}_itr${i}_mean_bet_mask"
+    flirt_fun_par="$flirt_fun_par -inweight ${tmpdir}/${flnm}_itr${i}_mean_bet_mask"
 
-    flirt -in ${tmpdir}/${outnm}_itr${i}_mean -ref $reffl -omat $tmpdir/final_mean.mat $flirt_fun_par
+    flirt -in ${tmpdir}/${flnm}_itr${i}_mean -ref $reffl -omat $tmpdir/final_mean.mat $flirt_fun_par
 
     declare -a vols=($vol_lst)
     cnt=0
@@ -357,7 +381,7 @@ then
         echo "$cnt    $cvol    $curr_mat    mc2_$cvol"
         convert_xfm -omat $curr_mat -concat $curr_mat $tmpdir/final_mean.mat
 
-        flirt -in $tmpdir/$cvol -ref ${tmpdir}/${outnm}_itr${i}_mean -o $tmpdir/mc2_$cvol -init $curr_mat  -applyxfm $trans_fun_par
+        flirt -in $tmpdir/$cvol -ref ${tmpdir}/${flnm}_itr${i}_mean -o $tmpdir/mc2_$cvol -init $curr_mat  -applyxfm $trans_fun_par
 
         cnt=$(($cnt+1))
 
@@ -367,7 +391,7 @@ fi
 
 #----------------------------------------------------------------------#
 fslmerge -t ${outnm} $mc_lst
-mv ${tmpdir}/${outnm}_itr${i}.mat/* ${outnm}.mat/
+mv ${tmpdir}/${flnm}_itr${i}.mat/* ${outnm}.mat/
 
 fsl_mcpar $outnm.mat -corr -out ${outnm}.par
 

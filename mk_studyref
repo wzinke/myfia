@@ -48,6 +48,7 @@ exit 1
 }
 # TODO: Make bet/mask options for reference more flexible
 # TODO: Apply smmothing only to the volumes used for coregistrtion but not for averagging
+# TODO: use susan for smoothing
 # BUG:  ? Using a extra reference gives weired results - error or general problem?
 
 if [ $# -lt 1 ]; then
@@ -291,7 +292,11 @@ do
 
     fslmerge -t ${tmpdir}/TS_itr${i} $mc_lst
 
-     fslmaths  ${tmpdir}/TS_itr${i} -inm 1000 -Tmean ${tmpdir}/TS_itr${i}_mean
+#     nvol=$(fslnvols ${tmpdir}/TS_itr${i})
+#     fslmaths  ${tmpdir}/TS_itr${i} -bin -Tmean -mul $nvol ${tmpdir}/TS_itr${i}vxlcnt
+#     fslmaths  ${tmpdir}/TS_itr${i} -inm -Tmean -mul $nvol -div ${tmpdir}/TS_itr${i}vxlcnt ${tmpdir}/TS_itr${i}_mean
+
+    fslmaths  ${tmpdir}/TS_itr${i} -inm 1000 -Tmean ${tmpdir}/TS_itr${i}_mean
 
     if [ $keep_tmp -eq 1 ]
     then
@@ -342,7 +347,10 @@ then
 
     fslmerge -t ${tmpdir}/TS_itr${i} $mc_lst
 
-    fslmaths  ${tmpdir}/TS_itr${i} -inm -Tmean ${tmpdir}/final/meanimg
+#     nvol=$(fslnvols ${tmpdir}/TS_itr${i})
+#     fslmaths  ${tmpdir}/TS_itr${i} -bin -Tmean -mul $nvol ${tmpdir}/final/vxlcnt
+#     fslmaths  ${tmpdir}/TS_itr${i} -inm -Tmean -mul $nvol -div ${tmpdir}/final/vxlcnt ${tmpdir}/final/meanimg
+    fslmaths  ${tmpdir}/TS_itr${i} -inm -Tmean ${tmpdir}/final/vxlcnt ${tmpdir}/final/meanimg
 
     chkreg ${tmpdir}/TS_itr${i}_mean $reffl ${tmpdir}/final/final_2.mat ${outnm}2ref.png
 

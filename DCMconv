@@ -63,8 +63,7 @@ done
 
 tmpdir=`tmpnam tmpDCMCONV`
 rm $tmpdir
-mkdir $tmpdir
-mkdir $tmpdir/nifti
+mkdir -p $tmpdir/nifti
 
 #__________________________________________________________________________________________#
 
