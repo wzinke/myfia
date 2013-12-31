@@ -96,7 +96,7 @@ get_coord=0
 usedefset=1
 ovly_stat=0
 
-tmpdir=`tmpnam tmpPSC`
+tmpdir=`tmpnam tmpSLC`
 rm $tmpdir
 mkdir $tmpdir;
 
