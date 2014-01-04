@@ -1,0 +1,72 @@
+#!/bin/bash
+#
+
+if [ $# -lt 1 ]
+then
+    echo ''
+    echo 'Usage: afni2fsl <flstem> <outfl> <delafni>'
+    echo '       converts AFNI BRK files to NIFTI files as used by FSL'
+    echo '       If no filename is specified the name of the input data will be used'
+    echo '       AFNI BRK files are deleted, if the third argument is not set to 0'
+    echo ''
+
+    exit
+else
+    flstem=`remove_ext $1`
+fi
+
+flstem=`echo "$flstem" |  sed -e 's/.BRIK//g' `
+flstem=`echo "$flstem" |  sed -e 's/.HEAD//g' `
+
+if [ $# -lt 2 ]
+then
+    outfl=$flstem
+else
+    outfl=`remove_ext $2`
+fi
+
+if [ $# -lt 3 ]
+then
+    delafni=1
+else
+    delafni=$3
+fi
+
+
+
+if [ -f ${flstem}+orig.BRIK ]
+then
+    flstem=${flstem}+orig
+fi
+
+if [ -f ${flstem}+tlrc.BRIK ]
+then
+    flstem=${flstem}+tlrc
+fi
+
+if [ ! -e ${flstem}.BRIK ]
+then
+    echo ""
+    echo "ERROR: Afni data file not found!"
+    echo "    file: ${flstem}.BRIK "
+    echo ""
+    exit
+fi
+
+if [ ! -e ${flstem}.HEAD ]
+then
+    echo ""
+    echo "ERROR: No header for the Afni data file found!"
+    echo "    file: ${flstem}.HEAD"
+    echo ""
+    exit
+fi
+
+3dAFNItoNIFTI -prefix $outfl $flstem
+fslchfiletype $FSLOUTPUTTYPE $outfl
+
+if [ $delafni -eq 1 ]
+then
+    rm ${flstem}.BRIK
+    rm ${flstem}.HEAD
+fi

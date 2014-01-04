@@ -1,0 +1,71 @@
+#!/bin/bash
+#
+# Uses afni function 2dImReg for motion correction.
+# Analyze data will be converted to afni format, motion
+# correction performed, and then converted back to Analyze
+#
+# wolf zinke, Nov 2007
+
+Usage() {
+cat << EOF
+
+    Usage: afni_2Dmc <infile_stem> [options]
+
+            Motion correction using AFNI's 2dImReg
+            Data is converted back to NIFTI format (FSL ddeault)
+
+            OPTIONS:
+                    -ref    reference volume [default: 0], could also be an image
+                    -out    basename for output data
+
+EOF
+    exit 1
+}
+
+#----------------------------------------------------------------------#
+if [ $# -lt 1 ]; then
+    Usage
+else
+    flnm=`remove_ext $1`;
+fi
+
+#----------------------------------------------------------------------#
+# define default parameter
+outfl=${flnm}_afnimc
+useweight=0
+refvol=0
+
+# get options
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+    -ref)  refvol=`remove_ext $2`
+           shift 2
+           ;;
+    -out)  outfl=$2
+           shift 2
+           ;;
+       -*)  Usage
+           ;;
+       *)  break
+           ;;
+    esac
+done
+
+#----------------------------------------------------------------------#
+# run motion correction
+if [ -e $refvol ]  # file name or volume number?
+then
+    2dImReg -input ${flnm}.nii.gz -prefix $outfl -dprefix $outfl -rprefix $outfl -dmm -basefile $refvol.nii.gz
+else
+    2dImReg -input ${flnm}.nii.gz -prefix $outfl -dprefix $outfl -rprefix $outfl -dmm -base $refvol
+fi
+
+#----------------------------------------------------------------------#
+# convert data to fsl's NIFTI format
+afni2fsl $outfl
+
+#----------------------------------------------------------------------#
+# plot motion parameter using R
+# echo "source('/DATA/MAFIA/r_scripts/plot_AFNI_MC.r'); afni.mc('${outfl}.par','${outfl}.eps'); q();" | R --vanilla --slave
+

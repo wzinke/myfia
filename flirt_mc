@@ -61,8 +61,6 @@ dof=12
 rot_tol=6
 do_inmask=0
 do_final=0
-tmpdir=`tmpnam tmpMC`
-rm $tmpdir
 keep_tmp=0
 costfun="corratio"
 ref=0
@@ -72,7 +70,7 @@ do_rsmpl=0
 sm_fwhm=0
 do_hdr=0
 numiter=1
-betpar="-r 30 -f 0.35 -Z"
+betpar="-f 0.35 -w 0.5"  # -Z
 searchtol="-nosearch"
 
 #----------------------------------------------------------------------#
@@ -126,9 +124,6 @@ do
      -betpar)   betpar="$2"
                 shift 2
                 ;;
-        -tmp)   tmpdir=$2
-                shift 2
-                ;;
        -keep)   keep_tmp=1
                 shift
                 ;;
@@ -144,11 +139,8 @@ done
 
 #----------------------------------------------------------------------#
 # check whether directory allready exists
-if [ -d $tmpdir ]
-then
-   rm -r $tmpdir    # delete whole directory
-fi
-
+tmpdir=`tmpnam tmpMC`
+rm $tmpdir
 mkdir $tmpdir;
 
 #----------------------------------------------------------------------#
@@ -205,9 +197,9 @@ else
     case $refmask in
         thr)    fslmaths $reffl -thrP $mask_thr -bin $refweight -odt char
                 ;;
-        bet)    bet $reffl ${reffl}_bet -R -o -m $betpar
+        bet)    bet2 $reffl ${reffl}_bet -o -m $betpar
                 immv ${reffl}_bet_mask $refweight
-                ;;                
+                ;;
           *)    echo "ERROR: Unknown option <$refmask> for reference weightning"
                 exit 1
                 ;;
@@ -227,8 +219,8 @@ fi
 inweight=${tmpdir}/inmask
 flirt_fun_par=""
 
-flirt_fun_par="$flirt_fun_par -usesqform -cost $costfun -searchcost $costfun $searchtol"
-flirt_fun_par="$flirt_fun_par -dof $dof -coarsesearch 20 -finesearch 6"
+flirt_fun_par="$flirt_fun_par -cost $costfun -searchcost $costfun $searchtol"  #-usesqform
+flirt_fun_par="$flirt_fun_par -dof $dof -coarsesearch 10 -finesearch 3"
 
 if [ $do_refmask -eq 1 ]
 then
@@ -262,7 +254,7 @@ do
 
     if [ $sm_fwhm != 0 ]
     then
-        fslmaths ${tmpdir}/${curr_vol} -s `sigma2fwhm $sm_fwhm`  ${tmpdir}/${curr_vol}
+        fslmaths ${tmpdir}/${curr_vol} -s `fwhm2sigma $sm_fwhm`  ${tmpdir}/${curr_vol}
     fi
 
     # create a weighning mask for the current input
@@ -272,7 +264,7 @@ do
             thr)    fslmaths ${tmpdir}/${curr_vol} -thrP $mask_thr -bin $inweight -odt char
 		    masksfx=$inweight
                     ;;
-            bet)    bet ${tmpdir}/${curr_vol} ${tmpdir}/${curr_vol}_bet -R -o -m $betpar
+            bet)    bet2 ${tmpdir}/${curr_vol} ${tmpdir}/${curr_vol}_bet -o -m $betpar
 		    masksfx=${tmpdir}/${curr_vol}_bet_mask
                     ;;
             *)      echo "ERROR: Unknown option <$inmask> for input weightning!"
@@ -335,6 +327,7 @@ do
         mc_lst="$mc_lst ${tmpdir}/mc_${curr_vol}_itr${i}"
         matlst="$matlst ${tmpdir}/${flnm}_itr${i}.mat/${curr_vol}"
     done
+
     echo " - done"
 
     fslmerge -t ${tmpdir}/${flnm}_itr${i} $mc_lst
@@ -343,7 +336,7 @@ do
     case $inmask in
 	thr)    fslmaths ${tmpdir}/${flnm}_itr${i}_mean -thrP $mask_thr -bin $refweight -odt char
 		;;
-	bet)    bet  ${tmpdir}/${flnm}_itr${i}_mean ${tmpdir}/${flnm}_itr${i}_mean_bet -R -o -m $betpar
+	bet)    bet2  ${tmpdir}/${flnm}_itr${i}_mean ${tmpdir}/${flnm}_itr${i}_mean_bet -o -m $betpar
 		imcp ${tmpdir}/${flnm}_itr${i}_mean_bet_mask $refweight
 		;;
 	*)      echo "ERROR: Unknown option <$inmask> for input weightning!"

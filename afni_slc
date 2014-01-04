@@ -1,0 +1,78 @@
+#!/bin/bash
+#
+
+Usage() {
+cat << EOF
+
+    Usage: afni_slc <infile_stem> [options]
+
+            Runs motion correction using AFNI's 3dvolreg
+            Data is converted back to NIFTI format (FSL ddeault)
+
+            OPTIONS:
+                    -out    basename for output data
+                    -TR     TR used for acquisition [in s]
+                    -disc   discard the given number of volumes from correction
+                    -seq    order of slice acquisition
+                                              default: 'seqminus' = descending
+                               other sensitive values: 'seqplus'  = ascending
+                                                       'alt+z2'   = interleaved
+EOF
+    exit 1
+}
+
+#----------------------------------------------------------------------#
+if [ $# -lt 1 ]; then
+    Usage
+else
+    flnm=`remove_ext $1`;
+fi
+
+#----------------------------------------------------------------------#
+# define default parameter
+outfl=${flnm}_afnimc
+seq=seqminus
+tr=1.74
+discvol=0
+
+# get options
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+    -seq)  seq=$2
+           shift 2
+           ;;
+    -disc) discvol=$2
+           shift 2
+           ;;
+     -TR)  tr=$2
+           shift 2
+           ;;
+    -out)  outfl=$2
+           shift 2
+           ;;
+      -*)  Usage
+           ;;
+       *)  break
+           ;;
+    esac
+done
+
+#----------------------------------------------------------------------#
+3dTshift -verbose -tpattern $seq -TR $tr -ignore $discvol -prefix $outfl ${flnm}.nii.gz
+
+#----------------------------------------------------------------------#
+afni2fsl $outfl $outfl
+
+#----------------------------------------------------------------------#
+#              S L I C E   N U M B E R                                 #
+#    tpattern    0   1   2   3   4   Comment                           #
+#    --------- --- --- --- --- ---   -------------------------------   #
+#    altplus     0 600 200 800 400   Alternating in the +z direction   #
+#    alt+z2    400   0 600 200 800   Alternating, but starting at #1   #
+#    altminus  400 800 200 600   0   Alternating in the -z direction   #
+#    alt-z2    800 200 600   0 400   Alternating, starting at #nz-2    #
+#    seqplus     0 200 400 600 800   Sequential  in the +z direction   #
+#    seqminus  800 600 400 200   0   Sequential  in the -z direction   #
+#----------------------------------------------------------------------#
+
