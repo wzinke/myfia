@@ -30,7 +30,7 @@ exit 1
 if [ $# -lt 1 ]; then
     Usage
 else
-    flnm=`remove_ext $1`;
+    flnm=$(remove_ext $1)
     shift
 fi
 
@@ -50,7 +50,7 @@ do
     -ref)  refvol=$2
            shift 2
            ;;
-    -out)  outfl=`remove_ext $2`
+    -out)  outfl=$(remove_ext $2)
            shift 2
            ;;
     -pad)  padstr="-zpad 4"
@@ -59,7 +59,7 @@ do
      -ip)  ipstr="-$2"
            shift 2
            ;;
-      -w)  weightfl=`remove_ext $2`
+      -w)  weightfl=$(remove_ext $2)
            useweight=1
            shift 2
            ;;
@@ -80,7 +80,7 @@ parstr="-verbose -prefix $outfl $padstr $ipstr-twopass -twodup -maxite 100 -floa
 if [ $useweight -eq 1 ]
 then
     3dcopy ${weightfl}.nii.gz tmp_afni_mask
-    parstr="$parstr  -weight tmp_afni_mask+orig[0]"
+    parstr="$parstr -weight tmp_afni_mask+orig[0]"
     rm tmp_afni_mask+orig.*
 fi
 
@@ -89,6 +89,7 @@ fi
 #----------------------------------------------------------------------#
 # convert data to fsl's NIFTI format
 afni2fsl $outfl
+fslcpgeom $flnm  $outfl
 
 #----------------------------------------------------------------------#
 # plot motion parameter using R

@@ -12,7 +12,7 @@ then
 
     exit
 else
-    flstem=`remove_ext $1`
+    flstem=$(remove_ext $1)
 fi
 
 flstem=`echo "$flstem" |  sed -e 's/.BRIK//g' `
@@ -22,7 +22,7 @@ if [ $# -lt 2 ]
 then
     outfl=$flstem
 else
-    outfl=`remove_ext $2`
+    outfl=$(remove_ext $2)
 fi
 
 if [ $# -lt 3 ]
@@ -31,7 +31,6 @@ then
 else
     delafni=$3
 fi
-
 
 
 if [ -f ${flstem}+orig.BRIK ]

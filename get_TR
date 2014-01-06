@@ -1,0 +1,56 @@
+#!/bin/bash
+#
+
+Usage() {
+cat << EOF
+
+    Usage: get_TR <infile> [options]
+
+    reads the TR value, trys to output them in seconds and rounds it if required.
+
+    OPTIONS:
+            -rndprec     precision of rounding: use 100 to get 2 decimal positions, 10 for one
+			if set to 0, no rounding is applied.
+
+            ###########################################################
+            ##   (c) wolf zinke (2008) - part of the MaFIA toolbox   ##
+            ##       for comments and questions: wolfzinke@gmx.net   ##
+            ###########################################################
+
+EOF
+    exit 1
+}
+
+if [ $# -lt 1 ]; then
+    Usage
+else
+    flnm=$1;
+    shift
+fi
+
+rndprec=0
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+    -rndprec)   rndprec=$2
+                shift 2
+                ;;
+          -*)   Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+ctr=$(fslval $flnm pixdim4)
+
+ctr=$(Rscript --vanilla -e "if($ctr > 100){$ctr/1000}else{$ctr}" | cut -d' ' -f2-)
+
+if [ $rndprec -gt 0 ]
+then
+    Rscript --vanilla -e "round( $rndprec * $ctr ) / $rndprec" | cut -d' ' -f2-
+else
+    echo $ctr
+fi
+

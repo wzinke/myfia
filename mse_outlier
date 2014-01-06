@@ -1,0 +1,194 @@
+#!/bin/bash
+#
+
+Usage() {
+cat << EOF
+
+    Usage: mse_outlier <infile> [options]
+
+    Calculates the mse for each volume.
+
+    OPTIONS:
+            -out        basename for the data output
+            -mask       use file for masking region
+            -ref        reference volume (file or number, overwrites the mean and median option)
+            -median     calculates median image as reference (default is -mean)
+            -art        detect possible artefact and plot data (.eps-file)
+            -span       specify the span of the loess filter (default: 0.025)
+            -keep       do not delete temporary files
+            -tmp        name of temporary directory
+
+            ###########################################################
+            ##   (c) wolf zinke (2008) - part of the MaFIA toolbox   ##
+            ##       for comments and questions: wolfzinke@gmx.net   ##
+            ###########################################################
+
+EOF
+    exit 1
+}
+
+if [ $# -lt 1 ]; then
+    Usage
+else
+    flnm=`remove_ext $1`;
+    shift
+fi
+
+#----------------------------------------------------------------------#
+tmpdir=`tmpnam tmp_MSE`
+rm $tmpdir
+keep_tmp=0
+do_mask=0
+do_mean=1
+do_ref=0
+do_art=0
+wrt_data=0
+outnm=${flnm}_MSE
+spanstr=""
+
+#----------------------------------------------------------------------#
+# get options
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+        -out)   outnm=$2
+                wrt_data=1
+                shift 2
+                ;;
+        -ref)   ref=$2
+                do_ref=1
+                shift 2
+                ;;
+        -art)   wrt_data=1
+                do_art=1
+                shift
+                ;;
+       -span)   spanstr=", span=$2"
+                shift 2
+                ;;
+       -mask)   maskfl=$2
+                do_mask=1
+                shift 2
+                ;;
+       -median) do_mean=0
+                shift
+                ;;
+        -tmp)   tmpdir=$2
+                shift 2
+                ;;
+       -keep)   keep_tmp=1
+                shift
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+#----------------------------------------------------------------------#
+# check whether directory allready exists
+if [ -d $tmpdir ]
+then
+   rm -r $tmpdir    # delete whole directory
+fi
+
+mkdir $tmpdir;
+
+FSLOUTPUTTYPE=NIFTI
+
+#----------------------------------------------------------------------#
+# prepare data
+if [ $do_mask -eq 1 ]
+then
+    if [ ! `imtest $maskfl` -eq 1 ]
+    then
+        echo ""
+        echo " ERROR: Mask file does not exist!"
+        echo "        file: $maskfl"
+        echo ""
+    fi
+
+    fslmaths ${flnm} -mas $maskfl $tmpdir/indata -odt float
+else
+    imln ${flnm} $tmpdir/indata
+fi
+
+#----------------------------------------------------------------------#
+if [ $do_ref -eq 1 ]
+then
+    if [ `imtest $ref` -eq 1 ]
+    then
+        imln $ref $tmpdir/refimg
+    else
+        fslroi $tmpdir/indata $tmpdir/refimg $ref 1
+    fi
+else
+    if [ $do_mean -eq 0 ]
+    then
+        fslmaths $tmpdir/indata -Tmedian $tmpdir/refimg -odt float
+    else
+        fslmaths $tmpdir/indata -Tmean $tmpdir/refimg -odt float
+    fi
+fi
+
+#----------------------------------------------------------------------#
+# calculate absolute mse
+fslmaths $tmpdir/indata -sub $tmpdir/refimg $tmpdir/res_img -odt float   # get the residuals
+fslmaths $tmpdir/res_img -sqr $tmpdir/abs_mse_img -odt float   # calculate the RMSE per voxel
+
+#----------------------------------------------------------------------#
+# calculate relative mse
+nvol=`fslnvols $tmpdir/indata`;
+rnvol=$(($nvol-1));
+
+fslroi $tmpdir/indata $tmpdir/set1 0 $rnvol
+fslroi $tmpdir/indata $tmpdir/set2 1 $rnvol
+
+fslmaths $tmpdir/set1 -sub $tmpdir/set2 -sqr $tmpdir/rel_mse_img -odt float
+
+#----------------------------------------------------------------------#
+if [ $do_mean -eq 0 ]
+then
+    fslmaths $tmpdir/abs_mse_img -Xmedian -Ymedian -Zmedian $tmpdir/aMSE -odt float
+    fslmaths $tmpdir/rel_mse_img -Xmedian -Ymedian -Zmedian $tmpdir/rMSE -odt float
+else
+    fslmaths $tmpdir/abs_mse_img -Xmean -Ymean -Zmean $tmpdir/aMSE -odt float
+    fslmaths $tmpdir/rel_mse_img -Xmean -Ymean -Zmean $tmpdir/rMSE -odt float
+fi
+
+amse=`fslmeants -i $tmpdir/aMSE`
+declare -a absMSE=($amse)
+
+rmse=`fslmeants -i $tmpdir/rMSE`
+declare -a relMSE=($rmse)
+
+#----------------------------------------------------------------------#
+echo "${absMSE[0]}  0" > $tmpdir/mse_data.dat
+cnt=1
+while [ $cnt -lt $nvol ]
+do
+    echo "${absMSE[$cnt]}  ${relMSE[$(($cnt-1))]}" >> $tmpdir/mse_data.dat
+    cnt=$(($cnt+1))
+done
+
+if [ $wrt_data -eq 1 ]
+then
+    cp $tmpdir/mse_data.dat ${outnm}.dat
+else
+    cat $tmpdir/mse_data.dat
+fi
+
+#----------------------------------------------------------------------#
+if [ $do_art -eq 1 ]
+then
+    echo "source('$RDIR/mse_outlier.r'); mse_outlier('${outnm}.dat','${outnm}' $spanstr); q()" | R --vanilla --slave
+fi
+
+#----------------------------------------------------------------------#
+if [ $keep_tmp -eq 0 ]
+then
+    rm -r $tmpdir
+fi

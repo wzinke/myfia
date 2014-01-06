@@ -43,4 +43,4 @@ fi
 pdir=`dirname $(which $0)`
 
 echo "source('$pdir/mcpar_decomp.r'); mc.princomp('${par_fl}','${outfl}','${grpnorm}'); q()" | R --vanilla --slave
-rm Rplots.ps
+rm Rplots.pdf

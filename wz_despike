@@ -1,0 +1,98 @@
+#!/bin/bash
+#
+# calling AFNI routine 3dDespike
+
+Usage() {
+cat << EOF
+
+    Usage: wz_despike <flnm> [options]
+
+           calling AFNI routine 3dDespike to process <dflnm>
+           The full filename including all file extensions is required!
+           If no output name is specified it will be <flnm>_dsp
+
+           OPTIONS:
+                   -out    basename for output data
+                   -disc   discard the given number of volumes from correction
+                   -nomask Process all voxels
+                           [default=use a mask of high-intensity voxels, ]
+                           [as created via '3dAutomask -dilate 4 dataset'].
+                   -cut    Alter default values for the spike cut values
+                           [default c1=2.5, c2=4.0].
+                           * c1 is the threshold value of s for a 'spike' [default c1=2.5].
+                           * c2 is the upper range of the allowed deviation from the curve:
+                                s=[c1..infinity) is mapped to s'=[c1..c2)   [default c2=4].
+                  -spk     Save 'spikiness' measure s for each voxel <flnm>_spk
+                  -q       Don't print '++' informational messages.
+                  -n      use new method
+
+
+EOF
+    exit 1
+}
+
+#----------------------------------------------------------------------#
+if [ $# -lt 1 ]; then
+    Usage
+else
+    flnm=$(remove_ext $1)
+    shift
+fi
+
+#----------------------------------------------------------------------#
+# define default parameter
+outfl=${flnm}_dsp
+save_spk=0
+
+#----------------------------------------------------------------------#
+# get options
+eval_str=""
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+      -nomask)  eval_str="$eval_str -nomask"
+                shift
+                ;;
+        -disc)  eval_str="$eval_str -ignore $2"
+                shift 2
+                ;;
+        -cut)   eval_str="$eval_str -cut $2 $3 "
+                shift 3
+                ;;
+        -out)   outfl=$2
+                shift 2
+                ;;
+        -spk)   eval_str="$eval_str -ssave ${flnm}_spk"
+                save_spk=1
+                shift
+                ;;
+          -q)   eval_str="$eval_str -q"
+                shift
+                ;;
+          -n)   eval_str="$eval_str -NEW"
+                shift
+                ;;
+         -*)    Usage
+                ;;
+          *)    break
+                ;;
+    esac
+done
+
+#----------------------------------------------------------------------#
+# echo "$eval_str"
+# # echo "$eval_str" | eval
+# eval $eval_str
+
+3dDespike -prefix $outfl $eval_str ${flnm}.nii.gz
+
+afni2fsl $outfl 
+fslcpgeom $flnm  $outfl 
+
+if [ $save_spk -eq 1 ]
+then
+#     eval_str="$eval_str -ssave $spk_fl"
+    afni2fsl  ${flnm}_spk 
+    fslcpgeom $flnm  ${flnm}_spk
+fi
+
