@@ -1,0 +1,16 @@
+#!/bin/bash
+#
+# nii2png
+#
+# created: 07.01.2010
+# by zinke
+#
+
+lst=`ls -1 *.nii*`
+for cfl in $lst
+do
+    if [ `fslnvols $cfl` -eq 1 ]
+    then
+        slice_set $cfl
+    fi
+done

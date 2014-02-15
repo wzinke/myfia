@@ -10,21 +10,21 @@ Usage() {
 cat << EOF
 
     Usage: $0 <flnm> [options]
-    
+
     Ad hoc hack to run bet on data that contain a limitted number of slices as FOV.
-    This hack might also be the recipie to improve results with brains that are 
+    This hack might also be the recipie to improve results with brains that are
     less of a spherical shape.
 
     OPTIONS:
 	  -o          output file name
-	  -f <f>      fractional intensity threshold (0->1); default=0.5; 
+	  -f <f>      fractional intensity threshold (0->1); default=0.5;
 		      smaller values give larger brain outline estimates
-	  -g <g>      vertical gradient in fractional intensity threshold (-1->1); default=0; 
+	  -g <g>      vertical gradient in fractional intensity threshold (-1->1); default=0;
 		      positive values give larger brain outline at bottom, smaller at top
 	  -thr <thr>  Apply robust threshold at this percentage level.
 	  -keep       don't delete temporary files when finished
 
- 
+
             ###########################################################
             ##   (c) wolf zinke (2014) - part of the MaFIA toolbox   ##
             ##         > MAcaque Functional Image Analysis <         ##
@@ -36,8 +36,8 @@ EOF
 exit 1
 
 }
- 
-# TODO: use radius as option (determine it based on re-scaled image size) 
+
+# TODO: use radius as option (determine it based on re-scaled image size)
 # TODO: get center of mass as center postition, run iteratively with adjusted -c option
 
 if [ $# -lt 1 ]; then
@@ -46,9 +46,9 @@ else
     flnm=$(remove_ext $1)
     shift
 fi
- 
+
 #__________________________________________________________________________________________#
-ostr="" 
+ostr=""
 mstr=""
 f=0.5
 g=0
@@ -71,6 +71,9 @@ do
         -thr)   thr=$2
                 shift 2
                 ;;
+        -keep)  keep_tmp=1
+                shift
+                ;;
           -*)   echo "Wrong option: <$1>"
                 echo ""
                 Usage
@@ -92,11 +95,11 @@ if [ $thr -ne 0 ]
 then
     fslmaths $tmpdir/inputfile -thrP $thr $tmpdir/inputfile
 fi
- 
-# get original voxel dimensions 
-Xdim=$(fslval $flnm pixdim1) 
-Ydim=$(fslval $flnm pixdim2) 
-Zdim=$(fslval $flnm pixdim3) 
+
+# get original voxel dimensions
+Xdim=$(fslval $flnm pixdim1)
+Ydim=$(fslval $flnm pixdim2)
+Zdim=$(fslval $flnm pixdim3)
 
 # determine the area that contains data (non-zero voxels)
 roi=$(fslstats $flnm -w)
