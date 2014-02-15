@@ -40,7 +40,7 @@ else
     shift
 fi
 
-if [ "X$(dirname $execut)" == "X" ]
+if [ $(type -t $execut | wc -w) -gt 0 ]
 then
     execut=$(which $execut)
 else
