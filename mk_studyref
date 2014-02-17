@@ -49,7 +49,7 @@ exit 1
 # TODO: Make bet/mask options for reference more flexible
 # TODO: Apply smmothing only to the volumes used for coregistrtion but not for averagging
 # TODO: use susan for smoothing
-# BUG:  ? Using a extra reference gives weired results - error or general problem?
+# TODO: Option for non-linear co-registration
 
 if [ $# -lt 1 ]; then
     Usage
@@ -264,10 +264,12 @@ do
     do
         if [ $i -eq 1 ]
         then
-            init_par=" -usesqform $searchtol "
+            init_par="  $searchtol "
+#             init_par=" -usesqform $searchtol "
         else
             preitr=$(($i-1))
-            init_par="-usesqform -init ${tmpdir}/itr${preitr}.mat/cvol_${cnt} $searchtol" #-nosearch"
+            init_par="-init ${tmpdir}/itr${preitr}.mat/cvol_${cnt} $searchtol" #-nosearch"
+#             init_par="-usesqform -init ${tmpdir}/itr${preitr}.mat/cvol_${cnt} $searchtol" #-nosearch"
         fi
 
         echo "arguments = \"-in ${curr_vol} -ref $Fref -omat ${tmpdir}/itr${i}.mat/cvol_${cnt}  $init_par -cost $costfun -searchcost $costfun -dof $dof -refweight $refweight -inweight ${curr_vol}_bet_mask -interp $ip $sclstr\"" >> $Csbmt_fl
