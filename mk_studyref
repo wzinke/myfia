@@ -241,9 +241,9 @@ if [ $get_refmask -eq 1 ]
 then
     bet   $reffl ${reffl}_bet -o -m $betpar -R
     immv ${reffl}_bet_mask $refweight
-else
+elif [ $do_bet -eq 1 ]
+then
     imcp $refmask $refweight
-    echo "imcp $refmask $refweight"
 fi
 
 
@@ -260,7 +260,6 @@ fi
 
 #__________________________________________________________________________________________#
 # run flirt on each volume
-
 Fref=$reffl
 
 for i in $(seq $numiter)
@@ -284,12 +283,12 @@ do
     sumstr=""
     maskstr=""
 
-if [ $do_bet -eq 1 ]
-then
-    betstr="-refweight $refweight -inweight ${curr_vol}_bet_mask "
-else
-    betstr=""
-fi
+    if [ $do_bet -eq 1 ]
+    then
+        betstr="-refweight $refweight -inweight ${curr_vol}_bet_mask "
+    else
+        betstr=""
+    fi
 
     cnt=0
     for curr_vol in $volfls
@@ -304,7 +303,7 @@ fi
 #             init_par="-usesqform -init ${tmpdir}/itr${preitr}.mat/cvol_${cnt} $searchtol" #-nosearch"
         fi
 
-        echo "arguments = \"-in ${curr_vol} -ref $Fref -omat ${tmpdir}/itr${i}.mat/cvol_${cnt}  $init_par -cost $costfun -searchcost $costfun $betstr -dof $dof -interp $ip $sclstr\"" >> $Csbmt_fl
+        echo "arguments = \"-in ${curr_vol} -ref $Fref -omat ${tmpdir}/itr${i}.mat/cvol_${cnt}  $init_par -cost $costfun -coarsesearch 18 -finesearch 6 -searchcost $costfun $betstr -dof $dof -interp $ip $sclstr\"" >> $Csbmt_fl
         echo "error  = ${tmpdir}/cvol_itr${i}/cvol_${cnt}_\$(Process).e" >> $Csbmt_fl
         echo "output = ${tmpdir}/cvol_itr${i}/cvol_${cnt}_\$(Process).o" >> $Csbmt_fl
         echo "Queue" >> $Csbmt_fl
@@ -348,26 +347,10 @@ fi
 
     condor_waitend "$Csbmt_fl $Tsbmt_fl $Nsbmt_fl" $loc_flag
 
-#     fslmerge -t ${tmpdir}/TS_itr${i} $mc_lst
-
-#     nvol=$(fslnvols ${tmpdir}/TS_itr${i})
     fslmaths  $maskstr ${tmpdir}/TS_itr${i}_vxlcnt
-
     fslmaths  $sumstr -div ${tmpdir}/TS_itr${i}_vxlcnt -inm 5000 ${tmpdir}/TS_itr${i}_mean
-
-#     fslmaths  ${tmpdir}/TS_itr${i} -inm 5000 -thrP 5 -Tmean ${tmpdir}/TS_itr${i}_vxlcnt -ing 5000 ${tmpdir}/TS_itr${i}_mean
     fslmaths  $mulstr -inm 5000  ${tmpdir}/TS_itr${i}_mul
 
-#     nvol=$(fslnvols ${tmpdir}/TS_itr${i})
-#     fslmaths  ${tmpdir}/TS_itr${i} -bin -Tmean -mul $nvol ${tmpdir}/TS_itr${i}vxlcnt
-#     fslmaths  ${tmpdir}/TS_itr${i} -inm -Tmean -mul $nvol -div ${tmpdir}/TS_itr${i}vxlcnt ${tmpdir}/TS_itr${i}_mean
-
-#     fslmaths  ${tmpdir}/TS_itr${i} -Tmean ${tmpdir}/TS_itr${i}_mean
-
-#     if [ $keep_tmp -eq 1 ]
-#     then
-#         fslmaths  ${tmpdir}/TS_itr${i} -Tstd ${tmpdir}/TS_itr${i}_std
-#     fi
     if [ $do_bet -eq 1 ]
     then
         bet  ${tmpdir}/TS_itr${i}_mean ${tmpdir}/TS_itr${i}_mean_bet -o -m $betpar -R
@@ -398,9 +381,9 @@ then
     echo "final co-registration to reference."
     mkdir ${tmpdir}/final
 
-    flirt -in ${tmpdir}/TS_itr${i}_mean -ref $reffl -omat ${tmpdir}/final/final_1.mat $searchtol -dof $dof $betstr
+    flirt -in ${tmpdir}/TS_itr${i}_mean -ref $reffl  -coarsesearch 18 -finesearch 6 -omat ${tmpdir}/final/final_1.mat $searchtol -dof $dof $betstr
 
-    flirt -in ${tmpdir}/TS_itr${i}_mean -ref $reffl -omat ${tmpdir}/final/final_2.mat $searchtol -dof $dof $betstr  -init ${tmpdir}/final/final_1.mat -o ${tmpdir}/final_mean
+    flirt -in ${tmpdir}/TS_itr${i}_mean -ref $reffl  -coarsesearch 18 -finesearch 6 -omat ${tmpdir}/final/final_2.mat $searchtol -dof $dof $betstr  -init ${tmpdir}/final/final_1.mat -o ${tmpdir}/final_mean
 
     condor_subhd $(which flirt)    > ${tmpdir}/final/coreg.submit
     condor_subhd $(which fslmaths) > ${tmpdir}/final/binnorm.submit
@@ -448,20 +431,9 @@ then
 
     condor_waitend "${tmpdir}/final/coreg.submit ${tmpdir}/final/binnorm.submit" $loc_flag
 
-#     fslmerge -t ${tmpdir}/TS_itr${i} $mc_lst
-#
-#     nvol=$(fslnvols ${tmpdir}/TS_itr${i})
-#     fslmaths  ${tmpdir}/TS_itr${i} -bin -Tmean -mul $nvol ${outnm}_vxlcnt
-
-
     fslmaths  $sumstr -div $cnt ${tmpdir}/TS_itr${i}_vxlcnt
-
     fslmaths  $sumstr -div ${outnm}_vxlcnt -inm 5000 ${outnm}_mean
-
-#     fslmaths  ${tmpdir}/TS_itr${i} -inm 5000 -thrP 5 -Tmean ${outnm}_vxlcnt -ing 5000 ${outnm}_mean
     fslmaths  $mulstr -inm 5000  ${outnm}_mul
-
-#     chkreg ${outnm}_mean $reffl ${tmpdir}/final/final_2.mat ${outnm}2ref.png
 
     last_head=${tmpdir}/final/meanimg
 else
