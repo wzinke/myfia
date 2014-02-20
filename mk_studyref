@@ -29,8 +29,8 @@ cat << EOF
             -sm         use smoothing with fwhm given here prior coregistration
             -nIter      Number of iterations for coregistration (default: 2)
             -betpar     Parameter used for the bet call (default: "-r 30 -f 0.4")
+            -nobet      do not use bet for weightning
             -thr        Apply intensity threshold on each volume
-            -ext        output the extracted brain only.
             -iso        resample to the specified voxel size
             -crop       reduce image size to the cubus that actual contains data
             -nproc      run local with n processes
@@ -68,6 +68,7 @@ ref=0
 rot_tol=6
 ip="spline"
 costfun="normcorr"
+do_bet=1
 betpar="-r 30 -f 0.35"
 searchtol="-nosearch"
 sm_fwhm=0
@@ -77,7 +78,6 @@ loc_flag=""
 got_ref=0
 thrstr=""
 smstr=''
-final_bet=0
 do_rsmpl=0
 do_crop=0
 
@@ -120,11 +120,12 @@ do
         -thr)   thrstr="-thrp $2"
                 shift 2
                 ;;
+      -nobet)   do_bet=0
+                get_refmask=0
+                shift
+                ;;
      -betpar)   betpar="$2"
                 shift 2
-                ;;
-        -ext)   final_bet=1
-                shift
                 ;;
        -crop)   do_crop=1
                 shift
@@ -182,7 +183,11 @@ echo ""
 echo "prepare volumes for processing:"
 
 condor_subhd $(which fslmaths) > $tmpdir/vols/fslm.submit
-condor_subhd $(which bet)      > $tmpdir/vols/bet.submit
+
+if [ $do_bet -eq 1 ]
+then
+    condor_subhd $(which bet)  > $tmpdir/vols/bet.submit
+fi
 
 for curr_vol in $vol_lst
 do
@@ -192,25 +197,37 @@ do
     echo "Queue" >> $tmpdir/vols/fslm.submit
     echo ""      >> $tmpdir/vols/fslm.submit
 
-    echo "arguments = \"$tmpdir/vols/vol_${cnt} $tmpdir/vols/vol_${cnt}_bet -o -m $betpar -R\"" >> $tmpdir/vols/bet.submit
-    echo "error  = $tmpdir/vols/cvol_${cnt}_bet_\$(Process).e" >> $tmpdir/vols/bet.submit
-    echo "output = $tmpdir/vols/cvol_${cnt}_bet_\$(Process).o" >> $tmpdir/vols/bet.submit
-    echo "Queue" >> $tmpdir/vols/bet.submit
-    echo ""      >> $tmpdir/vols/bet.submit
+    if [ $do_bet -eq 1 ]
+    then
+        echo "arguments = \"$tmpdir/vols/vol_${cnt} $tmpdir/vols/vol_${cnt}_bet -o -m $betpar -R\"" >> $tmpdir/vols/bet.submit
+        echo "error  = $tmpdir/vols/cvol_${cnt}_bet_\$(Process).e" >> $tmpdir/vols/bet.submit
+        echo "output = $tmpdir/vols/cvol_${cnt}_bet_\$(Process).o" >> $tmpdir/vols/bet.submit
+        echo "Queue" >> $tmpdir/vols/bet.submit
+        echo ""      >> $tmpdir/vols/bet.submit
+    fi
 
     volfls="$volfls   $tmpdir/vols/vol_${cnt}"
 
     if [ "$cnt" == "$ref" ]  # if reference image is a volume of the file list
     then
         ref="$tmpdir/vols/vol_${cnt}"
-        refmask="$tmpdir/vols/vol_${cnt}_bet_mask"
-        get_refmask=0
+
+        if [ $do_bet -eq 1 ]
+        then
+            refmask="$tmpdir/vols/vol_${cnt}_bet_mask"
+            get_refmask=0
+        fi
     fi
 
     cnt=$(($cnt+1))
 done
 
-condor_waitend "$tmpdir/vols/fslm.submit $tmpdir/vols/bet.submit" $loc_flag
+condor_waitend "$tmpdir/vols/fslm.submit" $loc_flag
+
+if [ $do_bet -eq 1 ]
+then
+    condor_waitend "$tmpdir/vols/bet.submit" $loc_flag
+fi
 
 #__________________________________________________________________________________________#
 # get the reference image
@@ -222,11 +239,13 @@ imcp $ref $reffl   # copy reference into temp directory
 # weightning mask
 if [ $get_refmask -eq 1 ]
 then
-    bet $reffl ${reffl}_bet -o -m $betpar -R
+    bet   $reffl ${reffl}_bet -o -m $betpar -R
     immv ${reffl}_bet_mask $refweight
 else
     imcp $refmask $refweight
+    echo "imcp $refmask $refweight"
 fi
+
 
 #__________________________________________________________________________________________#
 # rescale data
@@ -250,15 +269,28 @@ do
     echo "run iteration $i"
     Csbmt_fl=${tmpdir}/Coreg_itr${i}.submit
     Tsbmt_fl=${tmpdir}/Trans_itr${i}.submit
+    Nsbmt_fl=${tmpdir}/Norm_itr${i}.submit
 
     condor_subhd $(which flirt) > $Csbmt_fl
     condor_subhd $(which flirt) > $Tsbmt_fl
+    condor_subhd $(which fslmaths) > $Nsbmt_fl
 
     mkdir ${tmpdir}/itr${i}.mat
     mkdir ${tmpdir}/cvol_itr${i}
 
     mc_lst=""
     matlst=""
+    mulstr=""
+    sumstr=""
+    maskstr=""
+
+if [ $do_bet -eq 1 ]
+then
+    betstr="-refweight $refweight -inweight ${curr_vol}_bet_mask "
+else
+    betstr=""
+fi
+
     cnt=0
     for curr_vol in $volfls
     do
@@ -272,42 +304,75 @@ do
 #             init_par="-usesqform -init ${tmpdir}/itr${preitr}.mat/cvol_${cnt} $searchtol" #-nosearch"
         fi
 
-        echo "arguments = \"-in ${curr_vol} -ref $Fref -omat ${tmpdir}/itr${i}.mat/cvol_${cnt}  $init_par -cost $costfun -searchcost $costfun -dof $dof -refweight $refweight -inweight ${curr_vol}_bet_mask -interp $ip $sclstr\"" >> $Csbmt_fl
+        echo "arguments = \"-in ${curr_vol} -ref $Fref -omat ${tmpdir}/itr${i}.mat/cvol_${cnt}  $init_par -cost $costfun -searchcost $costfun $betstr -dof $dof -interp $ip $sclstr\"" >> $Csbmt_fl
         echo "error  = ${tmpdir}/cvol_itr${i}/cvol_${cnt}_\$(Process).e" >> $Csbmt_fl
         echo "output = ${tmpdir}/cvol_itr${i}/cvol_${cnt}_\$(Process).o" >> $Csbmt_fl
         echo "Queue" >> $Csbmt_fl
         echo ""      >> $Csbmt_fl
 
-        echo "arguments = \"-in ${curr_vol} -ref $rsmplvol -o ${tmpdir}/cvol_itr${i}/cvol_${cnt} -init ${tmpdir}/itr${i}.mat/cvol_${cnt} -interp $ip -applyxfm\"" >> $Tsbmt_fl
-        echo "error  = ${tmpdir}/cvol_itr${i}/cvolT_${cnt}_${cnt}_\$(Process).e" >> $Tsbmt_fl
-        echo "output = ${tmpdir}/cvol_itr${i}/cvolT_${cnt}_${cnt}_\$(Process).o" >> $Tsbmt_fl
+        echo "arguments = \"-in ${curr_vol} -ref $rsmplvol -o ${tmpdir}/cvol_itr${i}/cvolr_${cnt} -init ${tmpdir}/itr${i}.mat/cvol_${cnt} -interp $ip -applyxfm\"" >> $Tsbmt_fl
+        echo "error  = ${tmpdir}/cvol_itr${i}/cvolT_${cnt}_\$(Process).e" >> $Tsbmt_fl
+        echo "output = ${tmpdir}/cvol_itr${i}/cvolT_${cnt}_\$(Process).o" >> $Tsbmt_fl
         echo "Queue" >> $Tsbmt_fl
         echo ""      >> $Tsbmt_fl
+
+        echo "arguments = \"${tmpdir}/cvol_itr${i}/cvolr_${cnt} -thr 0  -inm 5000 ${tmpdir}/cvol_itr${i}/cvol_${cnt}\"" >> $Nsbmt_fl
+        echo "error  = ${tmpdir}/cvol_itr${i}/cvolN_${cnt}_\$(Process).e" >> $Nsbmt_fl
+        echo "output = ${tmpdir}/cvol_itr${i}/cvolN_${cnt}_\$(Process).o" >> $Nsbmt_fl
+        echo "Queue" >> $Nsbmt_fl
+        echo ""      >> $Nsbmt_fl
+
+        echo "arguments = \"${tmpdir}/cvol_itr${i}/cvolr_${cnt} -thr 0  -bin ${tmpdir}/cvol_itr${i}/cvol_${cnt}_mask\"" >> $Nsbmt_fl
+        echo "error  = ${tmpdir}/cvol_itr${i}/cvolN_${cnt}_\$(Process).e" >> $Nsbmt_fl
+        echo "output = ${tmpdir}/cvol_itr${i}/cvolN_${cnt}_\$(Process).o" >> $Nsbmt_fl
+        echo "Queue" >> $Nsbmt_fl
+        echo ""      >> $Nsbmt_fl
 
         mc_lst="$mc_lst ${tmpdir}/cvol_itr${i}/cvol_${cnt}"
         matlst="$matlst ${tmpdir}/itr${i}.mat/cvol_${cnt}"
 
+        if [ $cnt -eq 0 ]
+        then
+            mulstr=" ${tmpdir}/cvol_itr${i}/cvol_${cnt}"
+            sumstr=" ${tmpdir}/cvol_itr${i}/cvol_${cnt}"
+            maskstr="${tmpdir}/cvol_itr${i}/cvol_${cnt}_mask"
+
+        else
+            mulstr=" $mulstr  -mul ${tmpdir}/cvol_itr${i}/cvol_${cnt}"
+            sumstr=" $sumstr  -add ${tmpdir}/cvol_itr${i}/cvol_${cnt}"
+            maskstr="$maskstr -add ${tmpdir}/cvol_itr${i}/cvol_${cnt}_mask"
+        fi
+
         cnt=$(($cnt+1))
     done
 
-    condor_waitend "$Csbmt_fl $Tsbmt_fl" $loc_flag
+    condor_waitend "$Csbmt_fl $Tsbmt_fl $Nsbmt_fl" $loc_flag
 
-    fslmerge -t ${tmpdir}/TS_itr${i} $mc_lst
+#     fslmerge -t ${tmpdir}/TS_itr${i} $mc_lst
+
+#     nvol=$(fslnvols ${tmpdir}/TS_itr${i})
+    fslmaths  $maskstr ${tmpdir}/TS_itr${i}_vxlcnt
+
+    fslmaths  $sumstr -div ${tmpdir}/TS_itr${i}_vxlcnt -inm 5000 ${tmpdir}/TS_itr${i}_mean
+
+#     fslmaths  ${tmpdir}/TS_itr${i} -inm 5000 -thrP 5 -Tmean ${tmpdir}/TS_itr${i}_vxlcnt -ing 5000 ${tmpdir}/TS_itr${i}_mean
+    fslmaths  $mulstr -inm 5000  ${tmpdir}/TS_itr${i}_mul
 
 #     nvol=$(fslnvols ${tmpdir}/TS_itr${i})
 #     fslmaths  ${tmpdir}/TS_itr${i} -bin -Tmean -mul $nvol ${tmpdir}/TS_itr${i}vxlcnt
 #     fslmaths  ${tmpdir}/TS_itr${i} -inm -Tmean -mul $nvol -div ${tmpdir}/TS_itr${i}vxlcnt ${tmpdir}/TS_itr${i}_mean
 
-    fslmaths  ${tmpdir}/TS_itr${i} -inm 1000 -Tmean ${tmpdir}/TS_itr${i}_mean
+#     fslmaths  ${tmpdir}/TS_itr${i} -Tmean ${tmpdir}/TS_itr${i}_mean
 
-    if [ $keep_tmp -eq 1 ]
+#     if [ $keep_tmp -eq 1 ]
+#     then
+#         fslmaths  ${tmpdir}/TS_itr${i} -Tstd ${tmpdir}/TS_itr${i}_std
+#     fi
+    if [ $do_bet -eq 1 ]
     then
-        fslmaths  ${tmpdir}/TS_itr${i} -inm 1000 -Tstd ${tmpdir}/TS_itr${i}_std
+        bet  ${tmpdir}/TS_itr${i}_mean ${tmpdir}/TS_itr${i}_mean_bet -o -m $betpar -R
+        imcp ${tmpdir}/TS_itr${i}_mean_bet_mask $refweight
     fi
-
-    bet  ${tmpdir}/TS_itr${i}_mean ${tmpdir}/TS_itr${i}_mean_bet -o -m $betpar -R
-    imcp ${tmpdir}/TS_itr${i}_mean_bet_mask $refweight
-
     Fref=${tmpdir}/TS_itr${i}_mean
 
     rsmplvol="$Fref"
@@ -319,56 +384,90 @@ immv ${tmpdir}/TS_itr${i}_mean_tmp ${tmpdir}/TS_itr${i}_mean
 
 #__________________________________________________________________________________________#
 #
+
+if [ $do_bet -eq 1 ]
+then
+    betstr="-refweight $refmask -inweight ${curr_vol}_bet_mask "
+else
+    betstr=""
+fi
+
 if [ $got_ref -eq 1 ]
 then
     echo ""
     echo "final co-registration to reference."
     mkdir ${tmpdir}/final
 
-    flirt -in ${tmpdir}/TS_itr${i}_mean -ref $reffl -omat ${tmpdir}/final/final_1.mat $searchtol -dof $dof -refweight $refmask
+    flirt -in ${tmpdir}/TS_itr${i}_mean -ref $reffl -omat ${tmpdir}/final/final_1.mat $searchtol -dof $dof $betstr
 
-    flirt -in ${tmpdir}/TS_itr${i}_mean -ref $reffl -omat ${tmpdir}/final/final_2.mat $searchtol -dof $dof -refweight $refmask  -init ${tmpdir}/final/final_mean.mat
+    flirt -in ${tmpdir}/TS_itr${i}_mean -ref $reffl -omat ${tmpdir}/final/final_2.mat $searchtol -dof $dof $betstr  -init ${tmpdir}/final/final_1.mat -o ${tmpdir}/final_mean
 
-    condor_subhd $(which flirt) > ${tmpdir}/final/coreg.submit
+    condor_subhd $(which flirt)    > ${tmpdir}/final/coreg.submit
+    condor_subhd $(which fslmaths) > ${tmpdir}/final/binnorm.submit
 
     cnt=0
+    mulstr=""
+    sumstr=""
+    maskstr=""
+
     for curr_mat in $mc_lst
     do
         convert_xfm -omat ${tmpdir}/final/vol_${cnt}.mat -concat $curr_mat ${tmpdir}/final/final_2.mat
 
-        echo "arguments = \"-in $tmpdir/$cvol -ref ${tmpdir}/final_mean -o ${tmpdir}/final/vol_${cnt} -init ${tmpdir}/final/vol_${cnt}.mat $flirt_fun_par -applyxfm\"" >> ${tmpdir}/final/coreg.submit
+        echo "arguments = \"-in $tmpdir/$cvol -ref $reffl -o ${tmpdir}/final/volr_${cnt} -init ${tmpdir}/final/vol_${cnt}.mat $flirt_fun_par -applyxfm\"" >> ${tmpdir}/final/coreg.submit
         echo "error  = ${tmpdir}/final/cvol_${cnt}_\$(Process).e" >> ${tmpdir}/final/coreg.submit
         echo "output = ${tmpdir}/final/cvol_${cnt}_\$(Process).o" >> ${tmpdir}/final/coreg.submit
         echo "Queue" >> ${tmpdir}/final/coreg.submit
         echo ""      >> ${tmpdir}/final/coreg.submit
 
+        echo "arguments = \"${tmpdir}/final/volr_${cnt} -thr 0  -inm 5000 ${tmpdir}/final/vol_${cnt}\"" >> ${tmpdir}/final/binnorm.submit
+        echo "error  = ${tmpdir}/final/binnorm_cvol_${cnt}_\$(Process).e" >> ${tmpdir}/final/binnorm.submit
+        echo "output = ${tmpdir}/final/binnorm_cvol_${cnt}_\$(Process).o" >> ${tmpdir}/final/binnorm.submit
+        echo "Queue" >> ${tmpdir}/final/binnorm.submit
+        echo ""      >> ${tmpdir}/final/binnorm.submit
+
+        echo "arguments = \"${tmpdir}/final/volr_${cnt} -thr 0  -bin ${tmpdir}/final/vol_${cnt}_mask\"" >> ${tmpdir}/final/binnorm.submit
+        echo "error  = ${tmpdir}/final/binnorm_cvol_${cnt}_\$(Process).e" >> ${tmpdir}/final/binnorm.submit
+        echo "output = ${tmpdir}/final/binnorm_cvol_${cnt}_\$(Process).o" >> ${tmpdir}/final/binnorm.submit
+        echo "Queue" >> ${tmpdir}/final/binnorm.submit
+        echo ""      >> ${tmpdir}/final/binnorm.submit
+
+        if [ $cnt -eq 0 ]
+        then
+            mulstr=" ${tmpdir}/final/vol_${cnt}"
+            sumstr=" ${tmpdir}/final/vol_${cnt}"
+            maskstr="${tmpdir}/final/vol_${cnt}_mask"
+        else
+            mulstr="  $mulstr -mul ${tmpdir}/final/vol_${cnt}"
+            sumstr="  $sumstr -add ${tmpdir}/final/vol_${cnt}"
+            maskstr="$maskstr -add ${tmpdir}/final/vol_${cnt}_mask"
+        fi
+
         cnt=$(($cnt+1))
     done
 
-    condor_waitend "${tmpdir}/final/coreg.submit" $loc_flag
+    condor_waitend "${tmpdir}/final/coreg.submit ${tmpdir}/final/binnorm.submit" $loc_flag
 
-    fslmerge -t ${tmpdir}/TS_itr${i} $mc_lst
-
+#     fslmerge -t ${tmpdir}/TS_itr${i} $mc_lst
+#
 #     nvol=$(fslnvols ${tmpdir}/TS_itr${i})
-#     fslmaths  ${tmpdir}/TS_itr${i} -bin -Tmean -mul $nvol ${tmpdir}/final/vxlcnt
-#     fslmaths  ${tmpdir}/TS_itr${i} -inm -Tmean -mul $nvol -div ${tmpdir}/final/vxlcnt ${tmpdir}/final/meanimg
-    fslmaths  ${tmpdir}/TS_itr${i} -inm -Tmean ${tmpdir}/final/vxlcnt ${tmpdir}/final/meanimg
+#     fslmaths  ${tmpdir}/TS_itr${i} -bin -Tmean -mul $nvol ${outnm}_vxlcnt
 
-    chkreg ${tmpdir}/TS_itr${i}_mean $reffl ${tmpdir}/final/final_2.mat ${outnm}2ref.png
 
-    if [ $final_bet -eq 1 ]
-    then
-        bet  $outnm $outnm -o -m $betpar -R
-    else
-        last_head=${tmpdir}/final/meanimg
-    fi
+    fslmaths  $sumstr -div $cnt ${tmpdir}/TS_itr${i}_vxlcnt
+
+    fslmaths  $sumstr -div ${outnm}_vxlcnt -inm 5000 ${outnm}_mean
+
+#     fslmaths  ${tmpdir}/TS_itr${i} -inm 5000 -thrP 5 -Tmean ${outnm}_vxlcnt -ing 5000 ${outnm}_mean
+    fslmaths  $mulstr -inm 5000  ${outnm}_mul
+
+#     chkreg ${outnm}_mean $reffl ${tmpdir}/final/final_2.mat ${outnm}2ref.png
+
+    last_head=${tmpdir}/final/meanimg
 else
-    if [ $final_bet -eq 1 ]
-    then
-        imcp ${tmpdir}/TS_itr${i}_mean_bet $outnm
-    else
-        imcp ${tmpdir}/TS_itr${i}_mean $outnm
-    fi
+    imcp ${tmpdir}/TS_itr${i}_mean ${outnm}_mean
+    imcp ${tmpdir}/TS_itr${i}_mul  ${outnm}_mul
+    imcp ${tmpdir}/TS_itr${i}_vxlcnt ${outnm}_vxlcnt
     last_head=${tmpdir}/TS_itr${i}_mean
 fi
 
