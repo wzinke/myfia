@@ -282,12 +282,6 @@ do
     sumstr=""
     maskstr=""
 
-    if [ $do_bet -eq 1 ]
-    then
-        betstr="-refweight $refweight -inweight ${curr_vol}_bet_mask "
-    else
-        betstr=""
-    fi
 
     cnt=0
     for curr_vol in $volfls
@@ -300,6 +294,13 @@ do
             preitr=$(($i-1))
             init_par="-init ${tmpdir}/itr${preitr}.mat/cvol_${cnt} $searchtol" #-nosearch"
 #             init_par="-usesqform -init ${tmpdir}/itr${preitr}.mat/cvol_${cnt} $searchtol" #-nosearch"
+        fi
+
+        if [ $do_bet -eq 1 ]
+        then
+            betstr="-refweight $refweight -inweight ${curr_vol}_bet_mask "
+        else
+            betstr=""
         fi
 
         echo "arguments = \"-in ${curr_vol} -ref $Fref -omat ${tmpdir}/itr${i}.mat/cvol_${cnt}  $init_par -cost $costfun -coarsesearch 18 -finesearch 6 -searchcost $costfun $betstr -dof $dof -interp $ip $sclstr\"" >> $Csbmt_fl
@@ -360,7 +361,14 @@ do
     rsmplvol="$Fref"
 done
 
-minval=$(fslstats ${tmpdir}/TS_itr${i}_mean -k ${tmpdir}/TS_itr${i}_mean_bet_mask  -P 10)
+if [ $do_bet -eq 1 ]
+then
+    mstr="-k ${tmpdir}/TS_itr${i}_mean_bet_mask"
+else
+    mstr=""
+fi
+
+minval=$(fslstats ${tmpdir}/TS_itr${i}_mean $mstr -P 10)
 fslmaths ${tmpdir}/TS_itr${i}_mean -sub $minval -thr 0 ${tmpdir}/TS_itr${i}_mean_tmp
 immv ${tmpdir}/TS_itr${i}_mean_tmp ${tmpdir}/TS_itr${i}_mean
 
