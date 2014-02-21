@@ -282,7 +282,6 @@ do
     sumstr=""
     maskstr=""
 
-
     cnt=0
     for curr_vol in $volfls
     do
