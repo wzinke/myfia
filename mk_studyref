@@ -281,6 +281,7 @@ do
     mulstr=""
     sumstr=""
     maskstr=""
+    sqrstr=""
 
     cnt=0
     for curr_vol in $volfls
@@ -314,7 +315,7 @@ do
         echo "Queue" >> $Tsbmt_fl
         echo ""      >> $Tsbmt_fl
 
-        echo "arguments = \"${tmpdir}/cvol_itr${i}/cvolr_${cnt} -thr 0  -inm 5000 ${tmpdir}/cvol_itr${i}/cvol_${cnt}\"" >> $Nsbmt_fl
+        echo "arguments = \"${tmpdir}/cvol_itr${i}/cvolr_${cnt} -thr 0  -inm 1000 ${tmpdir}/cvol_itr${i}/cvol_${cnt}\"" >> $Nsbmt_fl
         echo "error  = ${tmpdir}/cvol_itr${i}/cvolN_${cnt}_\$(Process).e" >> $Nsbmt_fl
         echo "output = ${tmpdir}/cvol_itr${i}/cvolN_${cnt}_\$(Process).o" >> $Nsbmt_fl
         echo "Queue" >> $Nsbmt_fl
@@ -332,11 +333,13 @@ do
         if [ $cnt -eq 0 ]
         then
             mulstr=" ${tmpdir}/cvol_itr${i}/cvol_${cnt}"
+            sqrstr=" ${tmpdir}/final/vol_${cnt} -inm 1000"
             sumstr=" ${tmpdir}/cvol_itr${i}/cvol_${cnt}"
             maskstr="${tmpdir}/cvol_itr${i}/cvol_${cnt}_mask"
 
         else
             mulstr=" $mulstr  -mul ${tmpdir}/cvol_itr${i}/cvol_${cnt}"
+            sqrstr="  $sqrstr -mul ${tmpdir}/final/vol_${cnt} -sqrt -inm 1000"
             sumstr=" $sumstr  -add ${tmpdir}/cvol_itr${i}/cvol_${cnt}"
             maskstr="$maskstr -add ${tmpdir}/cvol_itr${i}/cvol_${cnt}_mask"
         fi
@@ -347,8 +350,7 @@ do
     condor_waitend "$Csbmt_fl $Tsbmt_fl $Nsbmt_fl" $loc_flag
 
     fslmaths  $maskstr ${tmpdir}/TS_itr${i}_vxlcnt
-    fslmaths  $sumstr -div ${tmpdir}/TS_itr${i}_vxlcnt -inm 5000 ${tmpdir}/TS_itr${i}_mean
-    fslmaths  $mulstr -inm 5000  ${tmpdir}/TS_itr${i}_mul
+    fslmaths  $sumstr -div ${tmpdir}/TS_itr${i}_vxlcnt -inm 1000 ${tmpdir}/TS_itr${i}_mean
 
     if [ $do_bet -eq 1 ]
     then
@@ -396,6 +398,7 @@ then
 
     cnt=0
     mulstr=""
+    sqrstr=""
     sumstr=""
     maskstr=""
 
@@ -409,7 +412,7 @@ then
         echo "Queue" >> ${tmpdir}/final/coreg.submit
         echo ""      >> ${tmpdir}/final/coreg.submit
 
-        echo "arguments = \"${tmpdir}/final/volr_${cnt} -thr 0  -inm 5000 ${tmpdir}/final/vol_${cnt}\"" >> ${tmpdir}/final/binnorm.submit
+        echo "arguments = \"${tmpdir}/final/volr_${cnt} -thr 0  -inm 1000 ${tmpdir}/final/vol_${cnt}\"" >> ${tmpdir}/final/binnorm.submit
         echo "error  = ${tmpdir}/final/binnorm_cvol_${cnt}_\$(Process).e" >> ${tmpdir}/final/binnorm.submit
         echo "output = ${tmpdir}/final/binnorm_cvol_${cnt}_\$(Process).o" >> ${tmpdir}/final/binnorm.submit
         echo "Queue" >> ${tmpdir}/final/binnorm.submit
@@ -424,10 +427,12 @@ then
         if [ $cnt -eq 0 ]
         then
             mulstr=" ${tmpdir}/final/vol_${cnt}"
+            sqrstr=" ${tmpdir}/final/vol_${cnt}"
             sumstr=" ${tmpdir}/final/vol_${cnt}"
             maskstr="${tmpdir}/final/vol_${cnt}_mask"
         else
             mulstr="  $mulstr -mul ${tmpdir}/final/vol_${cnt}"
+            sqrstr="  $sqrstr -mul ${tmpdir}/final/vol_${cnt} -sqrt"
             sumstr="  $sumstr -add ${tmpdir}/final/vol_${cnt}"
             maskstr="$maskstr -add ${tmpdir}/final/vol_${cnt}_mask"
         fi
@@ -438,13 +443,15 @@ then
     condor_waitend "${tmpdir}/final/coreg.submit ${tmpdir}/final/binnorm.submit" $loc_flag
 
     fslmaths  $sumstr -div $cnt ${tmpdir}/TS_itr${i}_vxlcnt
-    fslmaths  $sumstr -div ${outnm}_vxlcnt -inm 5000 ${outnm}_mean
-    fslmaths  $mulstr -inm 5000  ${outnm}_mul
+    fslmaths  $sumstr -div ${outnm}_vxlcnt -inm 1000 ${outnm}_mean
+    fslmaths  $mulstr -inm 1000  ${outnm}_mul
+    fslmaths  $sqrstr -inm 1000  ${outnm}_sqrt
 
     last_head=${tmpdir}/final/meanimg
 else
     imcp ${tmpdir}/TS_itr${i}_mean ${outnm}_mean
-    imcp ${tmpdir}/TS_itr${i}_mul  ${outnm}_mul
+    fslmaths  $mulstr -inm 1000  ${tmpdir}/TS_itr${i}_mul
+    fslmaths  $sqrstr -inm 1000  ${tmpdir}/TS_itr${i}_sqrt
     imcp ${tmpdir}/TS_itr${i}_vxlcnt ${outnm}_vxlcnt
     last_head=${tmpdir}/TS_itr${i}_mean
 fi
