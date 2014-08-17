@@ -1,0 +1,128 @@
+#!/bin/bash
+#
+# vol_pad
+#
+# created: 30.12.2013
+# by brain
+#
+
+Usage() {
+cat << EOF
+
+    Usage: $0 <flnm> [options]
+
+    Pad volume with slices (all zero) at both sides of each specified dimension.
+    Only numbers of slices less or equal to the current volume could be padded.
+
+    OPTIONS:
+	    -o     output name
+            -nvxl  specify the slice thickness attached to each side
+		   of the image cube (default: 4)
+	    -x     pad in the x-dimension
+	    -y	   pad in the y-dimension
+	    -z 	   pad in the z-dimension
+	    -3D    pad all three dimensions
+            -keep  don't delete temporary files when finished
+
+
+            ###########################################################
+            ##   (c) wolf zinke (2013) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##     for comments and questions: wolfzinke@gmx.net     ##
+            ###########################################################
+
+
+EOF
+exit 1
+
+}
+
+
+if [ $# -lt 1 ]; then
+    Usage
+else
+    flnm=$(remove_ext $1)
+    shift
+fi
+
+#__________________________________________________________________________________________#
+nvxl=4
+do_x=0
+do_y=0
+do_z=0
+onm=${flnm}_pad
+keep_tmp=0
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+       -nvxl)   nvxl=$2
+                shift 2
+                ;;
+          -x)   do_x=1
+                shift
+                ;;
+          -y)   do_y=1
+                shift
+                ;;
+          -z)   do_z=1
+                shift
+                ;;
+         -3D)   do_x=1
+	        do_y=1
+		do_z=1
+                shift
+                ;;
+          -o)   onm=$2
+                shift 2
+                ;;
+       -keep)   keep_tmp=1
+                shift
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+tmpdir=`tmpnam tmpPAD`
+rm $tmpdir
+mkdir $tmpdir;
+
+#__________________________________________________________________________________________#
+cfl=${flnm}
+
+if [ $do_x -eq 1 ]
+then
+    sliceX $cfl X 0 $nvxl -o $tmpdir/Xpadding
+    fslmaths $tmpdir/Xpadding -mul 0 $tmpdir/Xpadding
+    fslmerge -x $tmpdir/PadX $tmpdir/Xpadding $cfl $tmpdir/Xpadding
+    cfl=$tmpdir/PadX
+fi
+
+if [ $do_z -eq 1 ]
+then
+    sliceX $cfl Y 0 $nvxl -o $tmpdir/Ypadding
+    fslmaths $tmpdir/Ypadding -mul 0 $tmpdir/Ypadding
+    fslmerge -y $tmpdir/PadY $tmpdir/Ypadding $cfl $tmpdir/Ypadding
+    cfl=$tmpdir/PadY
+fi
+
+if [ $do_z -eq 1 ]
+then
+    sliceX $cfl Z 0 $nvxl -o $tmpdir/Zpadding
+    fslmaths $tmpdir/Zpadding -mul 0 $tmpdir/Zpadding
+    fslmerge -z $tmpdir/PadZ $tmpdir/Zpadding $cfl $tmpdir/Zpadding
+    cfl=$tmpdir/PadZ
+fi
+
+imcp $cfl $onm
+
+#----------------------------------------------------------------------#
+if [ $keep_tmp -eq 0 ]
+then
+    rm -r $tmpdir
+fi

@@ -14,6 +14,6 @@ and then add the directory to the known PATHs, i.e. in the ~/.bash_profile file:
     PATH=<path_to_dir>/myfia:${PATH}
     export  PATH
 
-Most of the BASH scripts require at least the FSL package (www.fmrib.ox.ac.uk/fsl), some need AFNI (http://afni.nimh.nih.gov/afni/).
+Most of the BASH scripts require at least the FSL package (www.fmrib.ox.ac.uk/fsl), some need AFNI (http://afni.nimh.nih.gov/afni/) or R (www.r-project.org).
 
 The scripts are released under the MIT licence, see MIT-LICENSE.txt for details. I do not guarantee that they are free of bugs, on the contrary, I am happy for any bug reports or comments of possible improvements.

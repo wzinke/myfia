@@ -1,0 +1,143 @@
+#!/bin/bash
+#
+# betFOV
+#
+# created: 04.01.2014
+# by brain
+#
+
+Usage() {
+cat << EOF
+
+    Usage: $0 <flnm> [options]
+
+    Ad hoc hack to run bet on data that contain a limitted number of slices as FOV.
+    This hack might also be the recipie to improve results with brains that are
+    less of a spherical shape.
+
+    OPTIONS:
+	  -o          output file name
+	  -f <f>      fractional intensity threshold (0->1); default=0.5;
+		      smaller values give larger brain outline estimates
+	  -g <g>      vertical gradient in fractional intensity threshold (-1->1); default=0;
+		      positive values give larger brain outline at bottom, smaller at top
+	  -thr <thr>  Apply robust threshold at this percentage level.
+	  -keep       don't delete temporary files when finished
+
+
+            ###########################################################
+            ##   (c) wolf zinke (2014) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##     for comments and questions: wolfzinke@gmx.net     ##
+            ###########################################################
+
+
+EOF
+exit 1
+
+}
+
+# TODO: use radius as option (determine it based on re-scaled image size)
+# TODO: get center of mass as center postition, run iteratively with adjusted -c option
+
+if [ $# -lt 1 ]; then
+    Usage
+else
+    flnm=$(remove_ext $1)
+    shift
+fi
+
+#__________________________________________________________________________________________#
+ostr=""
+mstr=""
+f=0.5
+g=0
+thr=0
+keep_tmp=0
+onm="${flnm}_brain"
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+          -o)   onm=$2
+                shift 2
+                ;;
+          -f)   f=$2
+                shift 2
+                ;;
+          -g)   g=$2
+                shift 2
+                ;;
+        -thr)   thr=$2
+                shift 2
+                ;;
+        -keep)  keep_tmp=1
+                shift
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+tmpdir=`tmpnam tmpFOV`
+rm $tmpdir
+mkdir $tmpdir;
+
+#__________________________________________________________________________________________#
+
+imcp $flnm $tmpdir/inputfile
+
+if [ $thr -ne 0 ]
+then
+    fslmaths $tmpdir/inputfile -thrP $thr $tmpdir/inputfile
+fi
+
+# get original voxel dimensions
+Xdim=$(fslval $flnm pixdim1)
+Ydim=$(fslval $flnm pixdim2)
+Zdim=$(fslval $flnm pixdim3)
+
+# determine the area that contains data (non-zero voxels)
+roi=$(fslstats $flnm -w)
+
+# calculate extend in each dimensions
+nX=$(echo "$roi" | cut -d' ' -f2)
+nY=$(echo "$roi" | cut -d' ' -f4)
+nZ=$(echo "$roi" | cut -d' ' -f6)
+
+Xsz=$(echo "$nX * $Xdim" | bc -l)
+Ysz=$(echo "$nY * $Ydim" | bc -l)
+Zsz=$(echo "$nZ * $Zdim" | bc -l)
+
+maxSz=$(Rscript --vanilla -e "max(c($Xsz, $Ysz, $Zsz))" | cut -d' ' -f2-)
+
+# try to scale each dimension to the same size
+newX=$(echo "$Xdim * ($maxSz/$Xsz)" | bc -l)
+newY=$(echo "$Ydim * ($maxSz/$Ysz)" | bc -l)
+newZ=$(echo "$Zdim * ($maxSz/$Zsz)" | bc -l)
+
+# change the coxel dimension
+fslchpixdim $tmpdir/inputfile $newX $newY $newZ > /dev/null
+
+# run bet on rescaled image
+bet $tmpdir/inputfile $tmpdir/inputfile_brain -f $f -g $g -o -m
+
+# copy original header to the resulting files
+fslcpgeom $flnm  $tmpdir/inputfile_brain
+fslcpgeom $flnm  $tmpdir/inputfile_brain_mask
+fslcpgeom $flnm  $tmpdir/inputfile_brain_overlay
+
+# create output files
+imcp $tmpdir/inputfile_brain $onm
+imcp $tmpdir/inputfile_brain_mask ${onm}_mask
+imcp $tmpdir/inputfile_brain_overlay ${onm}_overlay
+
+#----------------------------------------------------------------------#
+if [ $keep_tmp -eq 0 ]
+then
+    rm -r $tmpdir
+fi

@@ -1,0 +1,98 @@
+#!/bin/bash
+#
+# sliceX
+#
+# created: 03.01.2014
+# by brain
+#
+
+Usage() {
+cat << EOF
+
+    Usage: $0 <flnm> <dim> <start> <num_slc> [options]
+
+    This is a wrapper for the fslroi tool to extract a subset of
+    slices in one dimension, while leaving all others unchanged.
+
+    Note, slice counting starts with 0!
+
+    OPTIONS:
+            -o	output file name
+
+            ###########################################################
+            ##   (c) wolf zinke (2014) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##     for comments and questions: wolfzinke@gmx.net     ##
+            ###########################################################
+
+
+EOF
+exit 1
+
+}
+
+
+if [ $# -lt 4 ]; then
+    Usage
+else
+    flnm=$(remove_ext $1)
+    Sdim=$(echo "${2^}")
+    Sfrst=$3
+    Snum=$4
+    shift 4
+fi
+
+#__________________________________________________________________________________________#
+
+onm="${flnm}_${Sdim}${Sfrst}to$(($Sfrst+$Snum))"
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+          -o)   onm="$2"
+                shift 2
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+#__________________________________________________________________________________________#
+
+ nvol=$(fslnvols ${flnm})
+ numX=$(fslval ${flnm} dim1)
+ numY=$(fslval ${flnm} dim2)
+ numZ=$(fslval ${flnm} dim3)
+
+case $Sdim in
+	X)  if [ $(($Sfrst+$Snum)) -gt $numX ]
+	    then
+                echo "ERROR: Selected slices exceed number of slices in that dimension!"
+                exit 0
+	    fi
+	    slcsel="$Sfrst $Snum 0 $numY 0 $numZ 0 $nvol"
+	    ;;
+	Y)  if [ $(($Sfrst+$Snum)) -gt $numY ]
+            then
+                echo "ERROR: Selected slices exceed number of slices in that dimension!"
+                exit 0
+            fi
+            slcsel="0 $numX $Sfrst $Snum 0 $numZ 0 $nvol"
+	    ;;
+	Z)  if [ $(($Sfrst+$Snum)) -gt $numZ ]
+            then
+                echo "ERROR: Selected slices exceed number of slices in that dimension!"
+                exit 0
+            fi
+            slcsel="0 $numX 0 $numY $Sfrst $Snum 0 $nvol"
+	    ;;
+esac
+
+fslroi $flnm $onm $slcsel
+
+
+

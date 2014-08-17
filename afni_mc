@@ -1,0 +1,100 @@
+#!/bin/bash
+#
+# Uses afni function 3dvolreg for motion correction.
+# Analyze data will be converted to afni format, motion
+# correction performed, and then converted back to Analyze
+#
+# wolf zinke, Nov 2007
+
+Usage() {
+cat << EOF
+
+    Usage: afni_mc <infile_stem> [options]
+
+            Motion correction using AFNI's 3dvolreg
+            Data is converted back to NIFTI format (FSL ddeault)
+
+            OPTIONS:
+                    -ref    reference volume [default: 0], could also be an image
+                    -w      image used as weight
+                    -ip     interpolation method: Fourier (default), heptic, quintic, or cubic
+                    -pad    pad slice packs of 4 voxel at all edges
+                    -out    basename for output data
+                    -plot   plot correction parameter and save these plots as eps
+
+EOF
+exit 1
+}
+
+#----------------------------------------------------------------------#
+if [ $# -lt 1 ]; then
+    Usage
+else
+    flnm=$(remove_ext $1)
+    shift
+fi
+
+#----------------------------------------------------------------------#
+# define default parameter
+outfl=${flnm}_afnimc
+useweight=0
+refvol=0
+do_plot=0
+padstr=""
+ipstr="-Fourier"
+
+# get options
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+    -ref)  refvol=$2
+           shift 2
+           ;;
+    -out)  outfl=$(remove_ext $2)
+           shift 2
+           ;;
+    -pad)  padstr="-zpad 4"
+           shift 
+           ;;
+     -ip)  ipstr="-$2"
+           shift 2
+           ;;
+      -w)  weightfl=$(remove_ext $2)
+           useweight=1
+           shift 2
+           ;;
+   -plot)  do_plot=1
+           shift
+           ;;
+      -*)  Usage
+           ;;
+       *)  break
+           ;;
+    esac
+done
+
+parstr="-verbose -prefix $outfl $padstr $ipstr-twopass -twodup -maxite 100 -float -maxdisp1D ${outfl}.dsp -wtinp -base $refvol -dfile ${outfl}_mcpar.dat -1Dfile ${outfl}.par ${flnm}.nii.gz"
+
+#----------------------------------------------------------------------#
+# run motion correction
+if [ $useweight -eq 1 ]
+then
+    3dcopy ${weightfl}.nii.gz tmp_afni_mask
+    parstr="$parstr -weight tmp_afni_mask+orig[0]"
+    rm tmp_afni_mask+orig.*
+fi
+
+3dvolreg $parstr
+
+#----------------------------------------------------------------------#
+# convert data to fsl's NIFTI format
+afni2fsl $outfl
+fslcpgeom $flnm  $outfl
+
+#----------------------------------------------------------------------#
+# plot motion parameter using R
+if [ $do_plot -eq 1 ]
+then
+    echo "source('$RDIR/mc_plots.r'); mc.plots('${outfl}.par','${outfl}'); q()" | R --vanilla --slave
+    rm Rplots.pdf
+fi

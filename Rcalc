@@ -7,6 +7,9 @@ cat << EOF
     Usage: Rcalc <"expression">
 
            evaluates the expression by piping it to R (R syntax applies)
+           
+           Rscript, which is included in the R packages, does the same. 
+           So this wrapper could be discarded...
 
             ###########################################################
             ##   (c) wolf zinke (2008) - part of the MaFIA toolbox   ##
@@ -22,15 +25,15 @@ if [ $# -lt 1 ]; then
 else
     funcal=$1
 fi
-tmpfl=`tmpnam tmpR`
+# tmpfl=`tmpnam tmpR`
+# 
+# 
+# funcal="x = $funcal; write.table(x, file = '$tmpfl',row.names=F,col.names=F); q();"
+# #funcal="x = $funcal; write(x, file = $tmpfl,append=FALSE); q();"
+# echo "$funcal" | R --vanilla --slave
+# 
+# cat $tmpfl
+# rm $tmpfl
 
-
-funcal="x = $funcal; write.table(x, file = '$tmpfl',row.names=F,col.names=F); q();"
-#funcal="x = $funcal; write(x, file = $tmpfl,append=FALSE); q();"
-echo "$funcal" | R --vanilla --slave
-
-
-cat $tmpfl
-rm $tmpfl
-
+Rscript --vanilla -e "$funcal" | cut -d' ' -f2-
 
