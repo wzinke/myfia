@@ -28,6 +28,7 @@ cat << EOF
             -mni                  ROI is defined in MNI space
             -subj                 use the highres transformations instead of standard
             -nt                   do not apply coordinate transformation (to safe time)
+            -w                    calculate weighted mean
             -pfx <pfxhd> <pfxln>  print this string prior the roi statistics
             -keep                 don't delete temporary files when finished
 
@@ -114,6 +115,7 @@ keep_tmp=0
 prestr=""
 prehd=""
 mnistr=""
+wstr=""
 
 reftrans="standard"
 
@@ -189,6 +191,8 @@ do
           -nt)  do_trans=0
                 shift
                 ;;
+           -w)  wstr="-w"
+                ;;
         -perc)  do_perc=1
                 echo "WARNING: scaling to PSC not implemented yet, option ignored!"
                 shift
@@ -210,7 +214,7 @@ do
     esac
 done
 
-fslmaths $inmask $mthrstr -bin $tmpdir/roi -odt char
+fslmaths $inmask $mthrstr -bin $tmpdir/roi
 roi=$tmpdir/roi
 
 fodir=$dirpath/$odir
@@ -292,11 +296,11 @@ else
 fi
 imatfl=$tmpdir/invmat
 
-fslmaths $fodir/roi -thr 0.25 -bin -mul ${featdir}/mask $fodir/roithr -odt char
+fslmaths $fodir/roi -thr 0.2 -bin -mul ${featdir}/mask $fodir/roithr
 
 if [ $thropt == 'm' ]
 then
-    fslmaths $fodir/roithrmask -thr 0.25 -bin $fodir/roithrmask -odt char
+    fslmaths $fodir/roithrmask -thr 0.2 -bin $fodir/roithrmask
     fslmaths $fodir/roithrmask -mul 2 -add $fodir/roi $tmpdir/plotroi_func
     plroiF="$tmpdir/plotroi_func"
 
@@ -365,7 +369,7 @@ do
             "p")  cthr=$(fslstats ${featdir}/stats/zstat${ccope} -k $fodir/roi -P $thrval)
                   ;;
         esac
-        fslmaths ${featdir}/stats/zstat${ccope} -mas $fodir/roi -thr $cthr -bin $fodir/cope${ccope}_mask -odt char
+        fslmaths ${featdir}/stats/zstat${ccope} -mas $fodir/roi -thr $cthr -bin $fodir/cope${ccope}_mask
         cmask="$fodir/cope${ccope}_mask"
 
         vol_slicer ${featdir}/example_func -stat $cmask -thick -s 2 -cog -statrng 0.5 4 -out $fodir/roi_cope${ccope}.png
@@ -378,9 +382,9 @@ do
     numvxl=$(fslstats $cmask -V | awk '{print $1}')
 #     num10perc=$(echo "0.9*$numvxl" | bc -l | xargs printf "%1.0f")
 
-    fslmeants -i ${featdir}/stats/cope${ccope}  -m $cmask --showall --transpose  -o $tmpdir/cope${ccope}_all.dat
-    fslmeants -i ${featdir}/stats/zstat${ccope} -m $cmask --showall --transpose  -o $tmpdir/zstat${ccope}_all.dat
-    fslmeants -i ${featdir}/stats/pe${ccope}    -m $cmask --showall --transpose  -o $tmpdir/pe${ccope}_all.dat
+    fslmeants -i ${featdir}/stats/cope${ccope}  -m $cmask --showall --transpose $wstr -o $tmpdir/cope${ccope}_all.dat
+    fslmeants -i ${featdir}/stats/zstat${ccope} -m $cmask --showall --transpose $wstr -o $tmpdir/zstat${ccope}_all.dat
+    fslmeants -i ${featdir}/stats/pe${ccope}    -m $cmask --showall --transpose $wstr -o $tmpdir/pe${ccope}_all.dat
 
     declare -a cvals=($(cat $tmpdir/cope${ccope}_all.dat   | awk '{print $4}'))
     declare -a pvals=($(cat $tmpdir/pe${ccope}_all.dat     | awk '{print $4}'))

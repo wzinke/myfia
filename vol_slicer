@@ -569,7 +569,7 @@ then
     then
         if [ $do_neg -eq 1 ]
         then
-            smint=`fslstats $statmap -a   -r`
+            smint=`fslstats $statmap -a -r`
         else
             if [ $no_min -eq 1 ]
             then
