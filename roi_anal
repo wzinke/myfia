@@ -107,6 +107,7 @@ do_mni=0
 do_trans=1
 get_mat=1
 do_inv=0
+do_maskthr=0
 mthrstr=""
 thropt="0"
 thrval=0
@@ -162,6 +163,7 @@ do
                 shift 2
                 ;;
         -mthr)  mthrstr="-thr $2"
+                do_maskthr=1
                 shift 2
                 ;;
          -mat)  get_mat=0
@@ -214,8 +216,9 @@ do
     esac
 done
 
-fslmaths $inmask $mthrstr -bin $tmpdir/roi
-roi=$tmpdir/roi
+# fslmaths $inmask $mthrstr -bin $tmpdir/roi
+# roi=$tmpdir/roi
+roi=$inmask
 
 fodir=$dirpath/$odir
 
@@ -296,7 +299,13 @@ else
 fi
 imatfl=$tmpdir/invmat
 
-fslmaths $fodir/roi -thr 0.2 -bin -mul ${featdir}/mask $fodir/roithr
+# correct mask after interpolation (apply mask threshold here)
+if [ $do_maskthr -eq 1 ]
+then
+    fslmaths $fodir/roi $mthrstr -bin -mul ${featdir}/mask $fodir/roithr
+else
+    fslmaths $fodir/roi -thr 0.25 -bin -mul ${featdir}/mask $fodir/roithr
+fi
 
 if [ $thropt == 'm' ]
 then
@@ -325,7 +334,7 @@ then
     chkreg ${featdir}/example_func $bckimg $imatfl  $fodir/reg_check.png
 fi
 
-fslmeants -i ${featdir}/filtered_func_data  -m $fodir/roi -o $fodir/roi_ts.txt
+fslmeants -i ${featdir}/filtered_func_data $wstr -m $fodir/roi -o $fodir/roi_ts.txt
 
 roivxl=$(fslstats $fodir/roi -V | awk '{print $1}')
 
@@ -382,9 +391,9 @@ do
     numvxl=$(fslstats $cmask -V | awk '{print $1}')
 #     num10perc=$(echo "0.9*$numvxl" | bc -l | xargs printf "%1.0f")
 
-    fslmeants -i ${featdir}/stats/cope${ccope}  -m $cmask --showall --transpose $wstr -o $tmpdir/cope${ccope}_all.dat
-    fslmeants -i ${featdir}/stats/zstat${ccope} -m $cmask --showall --transpose $wstr -o $tmpdir/zstat${ccope}_all.dat
-    fslmeants -i ${featdir}/stats/pe${ccope}    -m $cmask --showall --transpose $wstr -o $tmpdir/pe${ccope}_all.dat
+    fslmeants -i ${featdir}/stats/cope${ccope}  -m $cmask --showall --transpose -o $tmpdir/cope${ccope}_all.dat
+    fslmeants -i ${featdir}/stats/zstat${ccope} -m $cmask --showall --transpose -o $tmpdir/zstat${ccope}_all.dat
+    fslmeants -i ${featdir}/stats/pe${ccope}    -m $cmask --showall --transpose -o $tmpdir/pe${ccope}_all.dat
 
     declare -a cvals=($(cat $tmpdir/cope${ccope}_all.dat   | awk '{print $4}'))
     declare -a pvals=($(cat $tmpdir/pe${ccope}_all.dat     | awk '{print $4}'))
