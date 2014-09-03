@@ -164,25 +164,25 @@ do
     then
         hd_ln=$line
 
-		pcnt=0
-		for chd in $line
-		do
-			pcnt=$(($pcnt+1));
-			case $chd in
-	  'Subj'| 'subject')    subj_pos=$pcnt
-							;;
+        pcnt=0
+        for chd in $line
+        do
+            pcnt=$(($pcnt+1));
+            case $chd in
+      'Subj'| 'subject')    subj_pos=$pcnt
+                            ;;
                 'study')    study_pos=$pcnt
                             ;;
               'session')    sess_pos=$pcnt
                             ;;
-			'sess_date')    date_pos=$pcnt
-							;;
-		         'scan')    scan_pos=$pcnt
-							;;
+            'sess_date')    date_pos=$pcnt
+                            ;;
+                 'scan')    scan_pos=$pcnt
+                            ;;
           'Run' | 'run')    run_pos=$pcnt
-							;;
-			esac
-		done
+                            ;;
+            esac
+        done
     else
         cstem="${flstem}"
         dateXchng='sed'
@@ -213,7 +213,7 @@ do
                                 cstem="${cstem}_run$chd"
                                 dateXchng=`echo "$dateXchng -e 's/XXrrrXX/r$chd/g'"`
                                 dateXchng=`echo "$dateXchng -e 's/XXrnumXX/run$chd/g'"`
-                                
+
                                 chd=$(printf "%0*d\n" 2 $chd)
                                 dateXchng=`echo "$dateXchng -e 's/XXrunXX/run$chd/g'"`
                                 dateXchng=`echo "$dateXchng -e 's/XXRunXX/run_$chd/g'"`

@@ -14,6 +14,7 @@ cat << EOF
         Determines the location of clusters in the given nifti file.
 
     OPTIONS:
+            -c      filename of input cope volume
             -o      name of the MNI table (otherwise use terminal for output)
             -lmax   use local maxima for refined information (NIY!)
             -mat    apply this transformation on the coordinates
@@ -64,7 +65,7 @@ fi
 
 keep_temp=0
 get_lmax=0
-refvol="$FSLDIR/data/standard/MNI152_T1_1mm_brain"
+refvol="$FSLDIR/data/standard/MNI152_T1_2mm_brain"
 atlas="Harvard-Oxford Cortical Structural Atlas"
 do_id=0
 do_max=0
@@ -74,10 +75,14 @@ do_reg=0
 maskfl=""
 do_lm=0
 lmstr=""
+copestr=""
 
 while [ $# -gt 0 ] ;
 do
     case $1 in
+          -c)   copestr="-c $2"
+                shift 2
+                ;;
           -o)   ostr=">> $2"
                 ohdstr="> $2"
                 shift 2
@@ -167,7 +172,7 @@ then
         cluster_thr -l "$flnm" -o $tmpdir -z $thr -p $pval $maskstr $mstr
         cltbl=$tmpdir/${flstem}_cluster.txt
     else
-        cluster -i $flnm -t $thr --mm --minclustersize --olmax=$tmpdir/locmax.dat $mstr > $tmpdir/clusttbl.dat
+        cluster -i $flnm  $copestr -t $thr --mm --minclustersize --olmax=$tmpdir/locmax.dat $mstr > $tmpdir/clusttbl.dat
         cltbl=$tmpdir/clusttbl.dat
     fi
 else

@@ -44,7 +44,7 @@ ofl=`tmpnam`
 rtpath=$(dirname `which $0`)
 echo $rtpath
 
-errmsg=`echo "addpath('$rtpath'); mnic = tal2icbm_fsl([$xc $yc $zc]); dlmwrite('$ofl', mnic, ' '); exit;" | matlab -nojvm -nodisplay -nosplash`
+errmsg=$(echo "addpath('$rtpath'); mnic = tal2icbm_fsl([$xc $yc $zc]); dlmwrite('$ofl', mnic, ' '); exit;" | matlab -nojvm -nodisplay -nosplash)
 
 cat $ofl
 rm  $ofl
