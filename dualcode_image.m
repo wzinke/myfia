@@ -19,15 +19,15 @@ end
 
 % scale factor [obsolet: interpolation steps (and thus increase image size by this factor)}
 if(~exist('ip','var') || isempty(ip))
-    ip = 1;  
+    ip = 1;
 end
 
 % image scale (increase size without interpolation)
 if(~exist('scl','var') || isempty(scl))
     if(ip==0)
-        scl = 2;  
+        scl = 2;
     else
-        scl = 1;  
+        scl = 1;
     end
 end
 
@@ -65,11 +65,11 @@ else
 end
 
 if(~exist('sigmap','var') || isempty(sigmap))
-    SMAP = abs(ZMAP) > 2.3;   
+    SMAP = abs(ZMAP) > 2.3;
 elseif(isnumeric(sigmap) && length(sigmap) == 1)
-    SMAP = abs(ZMAP) > sigmap; 
+    SMAP = abs(ZMAP) > sigmap;
 elseif(isnumeric(sigmap))
-    SMAP = sigmap;         
+    SMAP = sigmap;
 elseif(exist(sigmap,'file'))
      SMAP = read_avw(sigmap);
 else
@@ -88,41 +88,33 @@ end
 switch lower(sldim)
     case 'x'
         if(any(slcs < 1))
-            x = round(dims(1) * slcs);
-            x(x==0) = 1;
-            x(x>dims(1)) = dims(1);
-        else
-            x = slcs;
-            if(any(slcs > dims(1)))
-                error('Slice exceeds number of slices in volume');
-            end
+            slcs = ceil(dims(1) * slcs);
         end
+        x = slcs;
+        if(any(slcs > dims(1)))
+            error('Slice exceeds number of slices in volume');
+        end
+        
         y=1:dims(2);
-        z=1:dims(3);       
+        z=1:dims(3);
     case 'y'
         if(any(slcs < 1))
-            y = round(dims(2) * slcs);
-            y(y==0) = 1;
-            y(y>dims(2)) = dims(2);
-        else
-            y = slcs;
-            if(any(slcs > dims(2)))
-                error('Slice exceeds number of slices in volume');
-            end
+            slcs = ceil(dims(2) * slcs);
+        end
+        y = slcs;
+        if(any(slcs > dims(2)))
+            error('Slice exceeds number of slices in volume');
         end
         x=1:dims(1);
         z=1:dims(3);
     case 'z'
         if(any(slcs < 1))
-            z = round(dims(3) * slcs);
-            z(z==0) = 1;
-            z(z>dims(3)) = dims(3);
-        else
-            z = slcs;
+            slcs = ceil(dims(3) * slcs);
+        end
+        z = slcs;
             if(any(slcs > dims(3)))
                 error('Slice exceeds number of slices in volume');
             end
-        end
         x=1:dims(1);
         y=1:dims(2);
     otherwise
@@ -137,7 +129,7 @@ if(~exist('bckrng','var') || isempty(bckrng))
     bckvals = bckvals(:);
     bckvals(bckvals == 0) = [];
     B_range  = prctile(bckvals,[2 98]);
-elseif(length(alpharng) == 1)
+elseif(length(bckrng) == 1)
     B_range = [0 bckrng];
 else
     B_range = bckrng;
@@ -145,7 +137,7 @@ end
 
 % Set the Min/Max values for hue coding
 % Hue codes the effect size
-if(~exist('betarng','var') || isempty(betarng))   
+if(~exist('betarng','var') || isempty(betarng))
     bvals = BMAP(x,y,z);
     absmax  = max(abs(prctile(bvals(:),[1, 99])));
     H_range = [-absmax absmax]; % The colormap is symmetric around zero
@@ -172,27 +164,27 @@ for(i = 1:length(slcs))
     eval([sldim, ' = ',int2str(slcs(i)),';']); % careful, this redefines one dimension vector!
     %% Transform the underlay and beta map to RGB values, based on specified colormaps
     if(ip > 1)
-        % ipBCK    = interp2(rot90(squeeze(BCK(x,y,z))),  ip,'cubic');      
-        % ipPE     = interp2(rot90(squeeze(BMAP(x,y,z))), ip,'cubic');       
-        % alphamap = interp2(rot90(squeeze(ZMAP(x,y,z))), ip,'cubic');      
-        % ipSIG    = interp2(rot90(squeeze(SMAP(x,y,z))), ip,'cubic');   
-        
+        % ipBCK    = interp2(rot90(squeeze(BCK(x,y,z))),  ip,'cubic');
+        % ipPE     = interp2(rot90(squeeze(BMAP(x,y,z))), ip,'cubic');
+        % alphamap = interp2(rot90(squeeze(ZMAP(x,y,z))), ip,'cubic');
+        % ipSIG    = interp2(rot90(squeeze(SMAP(x,y,z))), ip,'cubic');
+
         ipBCK    = imresize(rot90(squeeze(BCK(x,y,z))),  ip, 'bicubic');
         ipPE     = imresize(rot90(squeeze(BMAP(x,y,z))), ip, 'bicubic');
         alphamap = imresize(rot90(squeeze(ZMAP(x,y,z))), ip, 'bicubic');
         ipSIG    = imresize(rot90(squeeze(SMAP(x,y,z))), ip, 'bicubic');
-        
-        ipSIG(ipSIG > 0.5) = 1; ipSIG(ipSIG <= 0.5) = 0; 
+
+        ipSIG(ipSIG > 0.5) = 1; ipSIG(ipSIG <= 0.5) = 0;
     else
-        ipBCK    = rot90(squeeze(BCK( x,y,z)));  
-        ipPE     = rot90(squeeze(BMAP(x,y,z)));          
-        alphamap = rot90(squeeze(ZMAP(x,y,z)));      
-        ipSIG    = rot90(squeeze(SMAP(x,y,z)));      
+        ipBCK    = rot90(squeeze(BCK( x,y,z)));
+        ipPE     = rot90(squeeze(BMAP(x,y,z)));
+        alphamap = rot90(squeeze(ZMAP(x,y,z)));
+        ipSIG    = rot90(squeeze(SMAP(x,y,z)));
     end
 
     CM_under = bone(256);      % colormap for the underlay (anatomical)
     CM_over  = twowaycol(256); % color map for the effect size
-    
+
     U_RGB = convert_to_RGB(ipBCK, CM_under, B_range);
     O_RGB = convert_to_RGB(ipPE,  CM_over,  H_range);
 
@@ -200,37 +192,39 @@ for(i = 1:length(slcs))
     alphamap(alphamap > A_range(2)) = A_range(2);
     alphamap(alphamap < A_range(1)) = 0;
     alphamap = alphamap/A_range(2);
-    
+
     %% plot data
     % Make a figure and set of axes
     imsz = size(ipBCK) .* scl;
     figpos = [ XYctr(1) - ceil(imsz(1)/2),  XYctr(2) - ceil(imsz(2)/2), imsz(1), imsz(2)];
-    F = figure('Color', 'k', 'Units', 'pixels', 'Position', figpos); 
-    axes('Position', [0 0 1 1]); 
+    F = figure('Color', 'k', 'Units', 'pixels', 'Position', figpos);
+    axes('Position', [0 0 1 1]);
 
     % Plot the underlay
-    image(U_RGB); 
+    image(U_RGB);
     hold on;
 
     % Now, add the Beta difference map as an overlay
-    layer2 = imagesc(O_RGB); 
+    layer2 = imagesc(O_RGB);
 
-    % Adjust the alpha values of the overlay 
+    % Adjust the alpha values of the overlay
     set(layer2, 'alphaData', alphamap);
     alpha(layer2,alphamap);
 
     % Add some (black) contours to annotate nominal significance
-    contour(ipSIG, 1, 'k', 'LineWidth', (ip+1)/2);
-        
+    if(sum(ipSIG(:)) > 0)
+        contour(ipSIG, 1, 'k', 'LineWidth', (ip+1)/2);
+    end
+    
     axis off;
     axis image;
-    
+
     %% save file
     if(~isempty(ofl))
         cfl = [ofl,'_', upper(sldim),int2str(slcs(i)),'.png'];
         hgexport(F, cfl, hgexport('factorystyle'), 'Format', 'png');
         % print(F, cfl,'-dpng','-r0');
-        crop(cfl, 0, 0); % get rid of the white margins Matlab added to the image frame 
+        crop(cfl, 0, 0); % get rid of the white margins Matlab added to the image frame
         close(F);
     end
 end
@@ -245,12 +239,12 @@ x = linspace(A_range(1), A_range(2), 256); % range in alpha (abs(t/z-stats))
 y = linspace(H_range(1), H_range(2), size(CM_over,1)); % range in hue (beta weight)
 [X,Y] = meshgrid(x,y); % Transform into a 2D matrix
 
-imagesc(x,y,Y); 
+imagesc(x,y,Y);
 axis xy; % Plot the colorbar
 
-colormap(CM_over); 
+colormap(CM_over);
 alpha(X);
-alpha('scaled');  
+alpha('scaled');
 
 set(gca, 'Xcolor', 'w', 'Ycolor', 'w', 'FontSize', 10, 'LineWidth',2)
 set(gca, 'YAxisLocation', 'right', 'TickDir', 'out')
@@ -289,17 +283,17 @@ function chk_FSL
     end
 
 %% Helper function: convert_to_RGB
-% this function was provided by E. A. Allen with the dualcodeimage code 
+% this function was provided by E. A. Allen with the dualcodeimage code
 % (http://mialab.mrn.org/datavis/)
 function IMrgb = convert_to_RGB(IM, cm, cmLIM)
-% convert_to_RGB - converts any image to truecolor RGB using a specified colormap  
+% convert_to_RGB - converts any image to truecolor RGB using a specified colormap
 % USAGE: IMrgb = convert_to_RGB(IM, cm, cmLIM)
-% INPUTS: 
+% INPUTS:
 %    IM    = the image [m x n]
 %    cm    = the colormap [p x 3], optional; default = jet(256)
-%    cmLIM = the data limits [min max] to be used in the color-mapping 
+%    cmLIM = the data limits [min max] to be used in the color-mapping
 %            optional; default = [min(IM) max(IM)]
-% OUTPUTS: 
+% OUTPUTS:
 %    IMrgb = the truecolor RGB image [m x n x 3]
 % Based on ind2rgb from the Image Processing Toolbox
 % EA Allen August 30, 2011
@@ -307,8 +301,8 @@ function IMrgb = convert_to_RGB(IM, cm, cmLIM)
 % modified by wolf zinke, Sep 2014
 
 %--------------------------------------------------------------------------
-    if(nargin < 2) 
-        cm = jet(256); 
+    if(nargin < 2)
+        cm = jet(256);
     end
     nIND = size(cm,1);
 
@@ -329,8 +323,8 @@ function IMrgb = convert_to_RGB(IM, cm, cmLIM)
     IM = double(IM)+1;
 
     % define color maps
-    r = zeros(size(IM)); 
-    g = zeros(size(IM)); 
+    r = zeros(size(IM));
+    g = zeros(size(IM));
     b = zeros(size(IM));
     r(:) = cm(IM,1);
     g(:) = cm(IM,2);
@@ -353,29 +347,29 @@ function cmap = twowaycol(m)
         m = 64;
     end
 
-    % GMT no green (NICE)           
-    % colmat = [32,96,255; 32,159,255; 32,191,255; 0,207,255; 42,255,255; 85,255,255; ...   
-    %           127,255,255; 170,255,255; 255,255,84; 255,240,0; 255,191,0; 255,168,0; ...   
-    %           255,138,0; 255,112,0; 255,77,0; 255,0,0] ./ 255;  
+    % GMT no green (NICE)
+    % colmat = [32,96,255; 32,159,255; 32,191,255; 0,207,255; 42,255,255; 85,255,255; ...
+    %           127,255,255; 170,255,255; 255,255,84; 255,240,0; 255,191,0; 255,168,0; ...
+    %           255,138,0; 255,112,0; 255,77,0; 255,0,0] ./ 255;
 
     %   sunsetred = [174, 208, 210, 237, 245, 249, 255, 255, 230, 180, 153, 119, 58, 0, 61];
     %   sunsetgreen = [28, 50, 77, 135, 162, 189, 227, 250, 245, 221, 199, 183, 137, 139, 82];
     %   sunsetblue = [62, 50, 62, 94, 117, 126, 170, 210, 254, 247, 236, 229, 201, 206, 161];
-    %   colmat = flipud([sunsetred(:),  sunsetgreen(:),  sunsetblue(:)]) ./ 255; 
+    %   colmat = flipud([sunsetred(:),  sunsetgreen(:),  sunsetblue(:)]) ./ 255;
 
     % % % RdYlBu10 (GOOD)
     % colmat = flipud([0.6471      0 0.1490; 0.8431 0.1882 0.1529; 0.9569 0.4275 0.2627; ...
     %                  0.9922 0.6824 0.3804; 0.9961 0.8784 0.5647; 0.8784 0.9529 0.9725; ...
     %                  0.6706 0.8510 0.9137; 0.4549 0.6784 0.8196; 0.2706 0.4588 0.7059; ...
-    %                  0.1922 0.2118 0.5843]); 
+    %                  0.1922 0.2118 0.5843]);
 
-    % % GMT_panoply (NICE)  
+    % % GMT_panoply (NICE)
     colmat = [0.015686 0.054902 0.847059;0.125490 0.313725 1.000000;0.254902 0.588235 1.000000;0.427451 0.756863 1.000000; ...
               0.525490 0.850980 1.000000;0.611765 0.933333 1.000000;0.686275 0.960784 1.000000;0.807843 1.000000 1.000000; ...
               1.000000 0.996078 0.278431;1.000000 0.921569 0.000000;1.000000 0.768627 0.000000;1.000000 0.564706 0.000000; ...
               1.000000 0.282353 0.000000;1.000000 0.000000 0.000000;0.835294 0.000000 0.000000;0.619608 0.000000 0.000000];
 
-    % % cmp_flux  (CLEAR)   
+    % % cmp_flux  (CLEAR)
     % colmat = [0 253 253;8 222 253;16 189 253;24 157 253;32 125 253;40 93 253;48 60 253;85 85 253;133 133 253;181 181 253; ...
     % 230 230 253;253 230 230;253 181 181;253 133 133;253 85 85;253 60 48;253 93 40;253 125 32;253 157 24;253 189 16; ...
     % 253 224 8;253 253 0] ./ 255;
@@ -401,7 +395,7 @@ function crop(filename,append,margin)
 %   the original filename, overwriting the old image. The extension (ext)
 %   can be anything IMREAD supports.
 %
-%   CROP(directory) crops all images in a directory. 
+%   CROP(directory) crops all images in a directory.
 %
 %   If APPEND is 1, CROP saves the cropped image as 'filename_crop.ext'
 %   in the same directory as the original.
@@ -462,9 +456,9 @@ function crop(filename,append,margin)
         % figure,plot(xsum),title('xsum'),xlabel('distance from left (pixels)'),ylabel('image intensity (big numbers are white)')
         % figure,plot(ysum),title('ysum'),xlabel('distance from top (pixels)'),ylabel('image intensity (big numbers are white)')
 
-        %xsum will be equal to max(xsum) wherever there is a blank column in 
-        %   the image (rgb white is [255,255,255]). The left edge for the 
-        %   cropped image is found by looking for the first column in which 
+        %xsum will be equal to max(xsum) wherever there is a blank column in
+        %   the image (rgb white is [255,255,255]). The left edge for the
+        %   cropped image is found by looking for the first column in which
         %   xsum is less than max(xsum) and then subtracting the margin.
         %   Similar code for other edges.
         xleftedge=find(xsum<max(xsum),1,'first')-margin;

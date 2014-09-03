@@ -45,7 +45,7 @@ EOF
 exit 1
 
 }
- 
+
 
 if [ $# -lt 3 ]; then
     Usage
@@ -65,9 +65,9 @@ mkdir -p $tmpdir/slices
 
 #__________________________________________________________________________________________#
 # define volumes according to the feat data
-bckimg=remove_ext($featdir/example_func)
-statmap=remove_ext($featdir/stats/zstat$statnum)
-betamap=remove_ext($featdir/stats/cope$statnum)
+bckimg=$(remove_ext $featdir/example_func)
+statmap=$(remove_ext $featdir/stats/zstat$statnum)
+betamap=$(remove_ext $featdir/stats/cope$statnum)
 
 fslmaths $featdir/thresh_zstat$statnum -bin $tmpdir/sigmap -odt char
 sigmap=$tmpdir/sigmap
@@ -75,10 +75,15 @@ sigmap=$tmpdir/sigmap
 alph=$(cat $featdir/design.fsf | grep z_thresh | cut -d')' -f2)
 beta='[]'
 
+
+bckstem=$(basename $bckimg)
+flext=$(basename $(ls $bckimg.*) | sed -e "s/$bckstem//g")
+
+
 #__________________________________________________________________________________________#
 
-slcset="0.15 0.3 0.45 0.6 0.75 0.9"
-slcdim='z'
+slcset="0.2 0.35 0.5 0.65 0.8"
+slcdim='Z'
 bckrng='4000 8000'
 ip=2
 scl=2
@@ -86,7 +91,7 @@ scl=2
 while [ $# -gt 0 ] ;
 do
     case $1 in
-        -dim)   slcdim=$2
+        -dim)   slcdim=$(echo $2 | awk '{print toupper($0)}')
                 shift 2
                 ;;
         -slc)   slcset=$2
@@ -104,13 +109,13 @@ do
        -beta)   beta=$2
                 shift 2
                 ;;
-        -bck)   bckimg=remove_ext($2)
+        -bck)   bckimg=$(remove_ext $2)
                 shift 2
                 ;;
        -brng)   bckrng="$2 $3"
                 shift 3
                 ;;
-       -mask)   sigmap=remove_ext($2)
+       -mask)   sigmap=$(remove_ext $2)
                 shift 2
                 ;;
           -*)   echo "Wrong option: <$1>"
@@ -123,25 +128,23 @@ do
 done
 
 #__________________________________________________________________________________________#
- 
-
-
-
-
-
 
 
 
 
 #__________________________________________________________________________________________#
 ### call matlab
-echo "addpath('$rtpath'); dualcode_image('$bckimg', '$statmap', '$betamap', '$sigmap', [$slcset], '$slcdim', $beta, $alph, [$bckrng], '$tmpdir/slices/slc', $ip, $scl); exit;"  | matlab -nodesktop -nosplash
+echo "addpath('$rtpath'); dualcode_image('$bckimg$flext', '$statmap$flext', '$betamap$flext', '$sigmap$flext', [$slcset], '$slcdim', $beta, $alph, [$bckrng], '$tmpdir/slices/slc', $ip, $scl); exit;"  | matlab -nodisplay -nosplash
 
 
 #__________________________________________________________________________________________#
 # merge images
+
+slclst=$(ls $tmpdir/slices/slc*.png | grep -v colbar | sort -n -k1.6)
+colslc=$(ls $tmpdir/slices/slc*colbar.png)
+
 pngappend $tmpdir/Yset.png + $pxl $tmpdir/Y_${cslc}.png $tmpdir/Yset.png
 
 
 
-
+ostem
