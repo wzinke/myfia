@@ -6,9 +6,12 @@
 # by zinke
 #
 
-### ToDo: allow combination of slice dimensions
-#         add slice representation
-#         add option to use different thresholding
+### ToDo: - allow combination of slice dimensions
+#         - add slice representation
+#         - add option to use different thresholding
+#         - make octave compatible
+#         - try to find other free solution (R or ImageMagick)
+
 
 Usage() {
 cat << EOF
@@ -31,7 +34,9 @@ cat << EOF
             -ip      image interpolation (default: 2)
             -zthr    set upper z-threshold (default uses design.fsf)
             -beta    set upper threshold for the beta image
+            -sig     use alternative mask to select significant voxel
             -brng    set intensity range for background
+            -keep    do not delete temporary files (for debugging)
 
 
             ###########################################################
@@ -75,18 +80,18 @@ sigmap=$tmpdir/sigmap
 alph=$(cat $featdir/design.fsf | grep z_thresh | cut -d')' -f2)
 beta='[]'
 
-
 bckstem=$(basename $bckimg)
 flext=$(basename $(ls $bckimg.*) | sed -e "s/$bckstem//g")
 
-
 #__________________________________________________________________________________________#
 
-slcset="0.2 0.35 0.5 0.65 0.8"
+slcset="0.2 0.3 0.4 0.5 0.6 0.7 0.8"
 slcdim='Z'
 bckrng='4000 8000'
 ip=2
 scl=2
+do_mask=0
+do_keep=0
 
 while [ $# -gt 0 ] ;
 do
@@ -109,14 +114,22 @@ do
        -beta)   beta=$2
                 shift 2
                 ;;
+        -sig)   sigmap=$(remove_ext $2)
+                shift 2
+                ;;
         -bck)   bckimg=$(remove_ext $2)
                 shift 2
                 ;;
        -brng)   bckrng="$2 $3"
                 shift 3
                 ;;
-       -mask)   sigmap=$(remove_ext $2)
+       -mask)   maskimg=$(remove_ext $2)
+                do_mask=1
                 shift 2
+                ;;
+       -keep)   do_keep=1
+                echo "tmp dir: $tmpdir"
+                shift
                 ;;
           -*)   echo "Wrong option: <$1>"
                 echo ""
@@ -129,13 +142,21 @@ done
 
 #__________________________________________________________________________________________#
 
+if [ $do_mask -eq 1 ]
+then
+    fslmaths $sigmap -mas $maskimg $tmpdir/sig_thr
+    sigmap="$tmpdir/sig_thr"
 
+    fslmaths $statmap -mas $maskimg $tmpdir/stat_thr
+    statmap="$tmpdir/stat_thr"
 
+    fslmaths $betamap -mas $maskimg $tmpdir/beta_thr
+    betamap="$tmpdir/beta_thr"
+fi
 
 #__________________________________________________________________________________________#
 ### call matlab
-echo "addpath('$rtpath'); dualcode_image('$bckimg$flext', '$statmap$flext', '$betamap$flext', '$sigmap$flext', [$slcset], '$slcdim', $beta, $alph, [$bckrng], '$tmpdir/slices/slc', $ip, $scl); exit;"  | matlab -nodisplay -nosplash
-
+echo "addpath('$rtpath'); dualcode_image('$bckimg$flext', '$statmap$flext', '$betamap$flext', '$sigmap$flext', [$slcset], '$slcdim', $beta, $alph, [$bckrng], '$tmpdir/slices/slc', $ip, $scl); exit;" | matlab -nodesktop -nosplash
 
 #__________________________________________________________________________________________#
 # merge images
@@ -143,8 +164,17 @@ echo "addpath('$rtpath'); dualcode_image('$bckimg$flext', '$statmap$flext', '$be
 slclst=$(ls $tmpdir/slices/slc*.png | grep -v colbar | sort -n -k1.6)
 colslc=$(ls $tmpdir/slices/slc*colbar.png)
 
-pngappend $tmpdir/Yset.png + $pxl $tmpdir/Y_${cslc}.png $tmpdir/Yset.png
+appndstr="$colslc"
+for cslc in $slclst
+do
+    appndstr="$appndstr + $cslc"
+done
 
+pngappend $appndstr $ostem.png
 
+#__________________________________________________________________________________________#
+if [ $do_keep -eq 0 ]
+then
+    rm -r $tmpdir
+fi
 
-ostem
