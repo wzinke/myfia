@@ -33,9 +33,14 @@ cat << EOF
             -s       scaling factor (default: 2)
             -ip      image interpolation (default: 2)
             -zthr    set upper z-threshold (default uses design.fsf)
+            -p       cluster p-value (default: 0.01)
+                     will rerun cluster threshold
+            -2s      run two sided test
+                     will rerun cluster threshold
             -beta    set upper threshold for the beta image
             -sig     use alternative mask to select significant voxel
             -brng    set intensity range for background
+            -thick   increase width of slice line
             -keep    do not delete temporary files (for debugging)
 
 
@@ -45,12 +50,10 @@ cat << EOF
             ##            Licensed under the MIT license             ##
             ###########################################################
 
-
 EOF
 exit 1
 
 }
-
 
 if [ $# -lt 3 ]; then
     Usage
@@ -73,6 +76,7 @@ mkdir -p $tmpdir/slices
 bckimg=$(remove_ext $featdir/example_func)
 statmap=$(remove_ext $featdir/stats/zstat$statnum)
 betamap=$(remove_ext $featdir/stats/cope$statnum)
+maskimg=$(remove_ext $featdir/mask)
 
 fslmaths $featdir/thresh_zstat$statnum -bin $tmpdir/sigmap -odt char
 sigmap=$tmpdir/sigmap
@@ -92,6 +96,11 @@ ip=2
 scl=2
 do_mask=0
 do_keep=0
+slcwdth=1
+do_thick=0
+pthr=0.01
+twoside=0
+do_clust=0
 
 while [ $# -gt 0 ] ;
 do
@@ -108,7 +117,15 @@ do
          -ip)   ip=$2
                 shift 2
                 ;;
-       -zthr)   alph=$2
+         -p)    pthr=$2
+                do_clust=1
+                shift 2
+                ;;
+        -2s)    twoside=1
+                do_clust=1
+                shift
+                ;;
+      -zthr)    alph=$2
                 shift 2
                 ;;
        -beta)   beta=$2
@@ -123,9 +140,14 @@ do
        -brng)   bckrng="$2 $3"
                 shift 3
                 ;;
-       -mask)   maskimg=$(remove_ext $2)
+       -mask)   fslmaths $maskimg -mul $2 -bin $tmpdir/mask -odt char
+                maskimg=$tmpdir/mask
                 do_mask=1
                 shift 2
+                ;;
+      -thick)   do_thick=1
+                slcwdth=3
+                shift
                 ;;
        -keep)   do_keep=1
                 echo "tmp dir: $tmpdir"
@@ -142,6 +164,28 @@ done
 
 #__________________________________________________________________________________________#
 
+if [ $do_clust -eq 1 ]
+then
+    smth=$(cat $featdir/stats/smoothness | cut -d' ' -f2 | head -1)
+    nvxl=$(fslstats $maskimg -V | cut -d' ' -f1)
+
+    cluster -z $statmap -c $betamap -t $alph -p $pthr -d $smth --volume=$nvxl --mm --othresh=$tmpdir/stat_thr --olmax=${ostem}_locmax.dat > ${ostem}_clust.dat
+
+    if [ $twoside -eq 1 ]
+    then
+        fslmaths $statmap -mul -1 $tmpdir/invstat
+        fslmaths $betamap -mul -1 $tmpdir/invbeta
+
+        cluster -z $tmpdir/invstat -c $tmpdir/invbeta -t $alph -p $pthr -d $smth --volume=$nvxl --mm --othresh=$tmpdir/inv_stat_thr --olmax=${ostem}_locmax_inv.dat > ${ostem}_clust_inv.dat
+
+        fslmaths $tmpdir/stat_thr -add $tmpdir/inv_stat_thr -bin $tmpdir/stat_thr -odt char
+    fi
+
+    sigmap=$tmpdir/stat_thr
+fi
+
+
+#__________________________________________________________________________________________#
 if [ $do_mask -eq 1 ]
 then
     fslmaths $sigmap -mas $maskimg $tmpdir/sig_thr
@@ -155,22 +199,110 @@ then
 fi
 
 #__________________________________________________________________________________________#
+# convert proportional slice selection to slice numbers
+
+Xdim=$(fslval $bckimg dim1)
+Ydim=$(fslval $bckimg dim2)
+Zdim=$(fslval $bckimg dim3)
+
+eval "DimSZ=\$${slcdim}dim"
+vxlres=$(echo "($(fslval $bckimg pixdim1) + $(fslval $bckimg pixdim2) +$(fslval $bckimg pixdim3))  / 3" | bc -l )
+
+nslc=""
+for cslc in $slcset
+do
+    if [ $(echo "$cslc < 1" | bc -l) -eq 1 ]
+    then
+        cnslc=$(echo "$DimSZ * $cslc" | bc -l | xargs printf "%1.0f" )
+
+        if [ $cnslc -eq 0 ]
+        then
+            cnslc=1
+        fi
+        nslc="$nslc  $cnslc  "
+    else
+        nslc="$nslc  $cslc  "
+    fi
+done
+
+slcset=$nslc
+
+#__________________________________________________________________________________________#
+# get the slice representation
+fslmaths $bckimg -mul 0        $tmpdir/slcsel     -odt char
+fslmaths $bckimg -mul 0 -add 1 $tmpdir/all_slices -odt char
+
+for cslc in $slcset
+do
+    if [ $do_thick -eq 1 ]
+    then
+        cslc=$(($cslc-1))
+    fi
+
+    case $slcdim in
+        X)  cslsel="$cslc $slcwdth 0 $Ydim 0 $Zdim 0 1"
+            ;;
+        Y)  cslsel="0 $Xdim $cslc $slcwdth 0 $Zdim 0 1"
+            ;;
+        Z)  cslsel="0 $Xdim 0 $Ydim $cslc $slcwdth 0 1"
+            ;;
+    esac
+
+    fslmaths $tmpdir/all_slices -roi $cslsel $tmpdir/tmp_slcsel
+    fslmaths $tmpdir/slcsel -add $tmpdir/tmp_slcsel $tmpdir/slcsel
+done
+
+overlay 0 1 $bckimg $bckrng $tmpdir/slcsel 1 4 $tmpdir/slc_vol
+
+repscl=$(echo "(1 + $ip * $scl) / 2" | bc -l | xargs printf "%1.0f")
+
+case $slcdim in
+    X)  slicer $tmpdir/slc_vol -s $repscl -u -y 0.6 $tmpdir/sel1.png -z 0.6 $tmpdir/sel2.png
+        origMM=$(fslhd $bckimg | grep sto_xyz:1 | awk '{ if($5>=0) { print $5} else {print $5*-1 }}')
+        ;;
+    Y)   slicer $tmpdir/slc_vol -s $repscl -u -x 0.6 $tmpdir/sel1.png -z 0.6 $tmpdir/sel2.png
+        origMM=$(fslhd $bckimg | grep sto_xyz:2 | awk '{ if($5>=0) { print $5} else {print $5*-1 }}')
+        ;;
+    Z)  slicer $tmpdir/slc_vol -s $repscl -u -x 0.6 $tmpdir/sel1.png -y 0.6 $tmpdir/sel2.png
+        origMM=$(fslhd $bckimg | grep sto_xyz:3 | awk '{ if($5>=0) { print $5} else {print $5*-1 }}')
+        ;;
+esac
+
+origVXL=$(echo "$origMM / $DimSZ" | bc -l | awk '{ printf  "%.0f\n", $0 }')
+
+pngappend $tmpdir/sel1.png - 0    $tmpdir/sel2.png $tmpdir/SelSlc.png
+
+png_str="$png_str $tmpdir/Zset.png"
+
+#__________________________________________________________________________________________#
 ### call matlab
 echo "addpath('$rtpath'); dualcode_image('$bckimg$flext', '$statmap$flext', '$betamap$flext', '$sigmap$flext', [$slcset], '$slcdim', $beta, $alph, [$bckrng], '$tmpdir/slices/slc', $ip, $scl); exit;" | matlab -nodesktop -nosplash
 
 #__________________________________________________________________________________________#
 # merge images
+ptsz=`echo "$DimSZ * 0.2" | bc -l | xargs printf "%1.0f"`
+
+if [ $ptsz -lt 10 ]
+then
+    ptsz=10
+fi
 
 slclst=$(ls $tmpdir/slices/slc*.png | grep -v colbar | sort -n -k1.6)
 colslc=$(ls $tmpdir/slices/slc*colbar.png)
 
-appndstr="$colslc"
+appndstr="$tmpdir/SelSlc.png"
 for cslc in $slclst
 do
-    appndstr="$appndstr + $cslc"
+    cslcnt=$( basename $cslc | cut -d. -f1 | cut -d_ -f2 | sed 's/^.//' )
+
+    cvxlMM=$(echo "($origVXL - $cslcnt) * $vxlres"  | bc -l | awk '{ printf  "%6.2f\n", $0 }')
+
+    montage -geometry +0+0 -font Palatino-Bold -background black  -fill LightYellow -pointsize $ptsz -label "$cvxlMM mm" $cslc $cslc
+
+    appndstr="$appndstr + 0 $cslc"
 done
 
-pngappend $appndstr $ostem.png
+pngappend $appndstr + 0 $colslc $ostem.png
 
 #__________________________________________________________________________________________#
 if [ $do_keep -eq 0 ]

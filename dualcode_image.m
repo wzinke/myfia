@@ -139,7 +139,9 @@ end
 % Hue codes the effect size
 if(~exist('betarng','var') || isempty(betarng))
     bvals = BMAP(x,y,z);
-    absmax  = max(abs(prctile(bvals(:),[1, 99])));
+    bvals = abs(bvals(:));
+    absmax  = max(prctile(bvals(bvals>0),[1, 99]));
+%     absmax  = max(abs(bvals(:)));
     H_range = [-absmax absmax]; % The colormap is symmetric around zero
 elseif(length(betarng) == 1)
     absmax  = abs(betarng);
@@ -151,8 +153,8 @@ end
 % Set the Min/Max T-values for alpha coding
 % opaqueness codes statistical t/z value
 if(~exist('alpharng','var') || isempty(alpharng))
-    alphvals = ZMAP(x,y,z);
-    alpharng  = max(abs(prctile(alphvals(:),[99])));
+    alphvals = abs(ZMAP(x,y,z));
+    alpharng  = max(prctile(alphvals(:),[99]));
     A_range = [0 alpharng]; % The colormap is symmetric around zero
 elseif(length(alpharng) == 1)
     A_range = [0 alpharng];
@@ -348,9 +350,9 @@ function cmap = twowaycol(m)
     end
 
     % GMT no green (NICE)
-%     colmat = [32,96,255; 32,159,255; 32,191,255; 0,207,255; 42,255,255; 85,255,255; ...
-%               127,255,255; 170,255,255; 255,255,84; 255,240,0; 255,191,0; 255,168,0; ...
-%               255,138,0; 255,112,0; 255,77,0; 255,0,0] ./ 255;
+    colmat = [32,96,255; 32,159,255; 32,191,255; 0,207,255; 42,255,255; 85,255,255; ...
+              127,255,255; 170,255,255; 255,255,84; 255,240,0; 255,191,0; 255,168,0; ...
+              255,138,0; 255,112,0; 255,77,0; 255,0,0] ./ 255;
 % 
 %       sunsetred = [174, 208, 210, 237, 245, 249, 255, 255, 230, 180, 153, 119, 58, 0, 61];
 %       sunsetgreen = [28, 50, 77, 135, 162, 189, 227, 250, 245, 221, 199, 183, 137, 139, 82];
@@ -370,9 +372,9 @@ function cmap = twowaycol(m)
 %               1.000000 0.282353 0.000000;1.000000 0.000000 0.000000;0.835294 0.000000 0.000000;0.619608 0.000000 0.000000];
 % 
     % % cmp_flux  (CLEAR)
-    colmat = [0 253 253;  8 222 253;  16 189 253;  24 157 253;  32 125 253;  40 93 253;  48 60 253;  85 85 253;  133 133 253;  181 181 253; ...
-    230 230 253;  253 230 230;  253 181 181;  253 133 133;  253 85 85;  253 60 48;  253 93 40;  253 125 32;  253 157 24;  253 189 16; ...
-    253 224 8;  253 253 0] ./ 255;
+%     colmat = [0 253 253;  8 222 253;  16 189 253;  24 157 253;  32 125 253;  40 93 253;  48 60 253;  85 85 253;  133 133 253;  181 181 253; ...
+%     230 230 253;  253 230 230;  253 181 181;  253 133 133;  253 85 85;  253 60 48;  253 93 40;  253 125 32;  253 157 24;  253 189 16; ...
+%     253 224 8;  253 253 0] ./ 255;
 
 %     % lbmap (DECENT)
 %     colmat = flipud([175  53  71; 216  82  88; 239 133 122; 245 177 139; 249 216 168; 242 238 197;
