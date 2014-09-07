@@ -7,8 +7,7 @@
 #
 
 ### ToDo: - allow combination of slice dimensions
-#         - add slice representation
-#         - add option to use different thresholding
+#         - add option to use FDR thresholding
 #         - make octave compatible
 #         - try to find other free solution (R or ImageMagick)
 
@@ -26,6 +25,7 @@ cat << EOF
 
     OPTIONS:
             -bck     use different volume as background (must have same geometry)
+            -fac     scaling factor to convert copes to something more like PSC
             -mask    apply mask to statistical images
             -dim     slice dimension
             -slc     slices to print
@@ -94,6 +94,7 @@ slcdim='Z'
 bckrng='4000 8000'
 ip=2
 scl=2
+sclfac=0
 do_mask=0
 do_keep=0
 slcwdth=1
@@ -111,7 +112,10 @@ do
         -slc)   slcset=$2
                 shift 2
                 ;;
-          -s)   scl=$2
+        -fac)   sclfac=$2
+                shift 2
+                ;;
+         -s)   scl=$2
                 shift 2
                 ;;
          -ip)   ip=$2
@@ -163,7 +167,7 @@ do
 done
 
 #__________________________________________________________________________________________#
-
+# apply cluster thresholding
 if [ $do_clust -eq 1 ]
 then
     smth=$(cat $featdir/stats/smoothness | cut -d' ' -f2 | head -1)
@@ -184,8 +188,16 @@ then
     sigmap=$tmpdir/stat_thr
 fi
 
+#__________________________________________________________________________________________#
+# rescale the parameter estimates
+if [ $sclfac -ne 0 ]
+then
+    fslmaths $betamap -mul $sclfac $tmpdir/beta_scl
+    betamap=$tmpdir/beta_scl
+fi
 
 #__________________________________________________________________________________________#
+# apply mask
 if [ $do_mask -eq 1 ]
 then
     fslmaths $sigmap -mas $maskimg $tmpdir/sig_thr
@@ -277,6 +289,7 @@ png_str="$png_str $tmpdir/Zset.png"
 #__________________________________________________________________________________________#
 ### call matlab
 echo "addpath('$rtpath'); dualcode_image('$bckimg$flext', '$statmap$flext', '$betamap$flext', '$sigmap$flext', [$slcset], '$slcdim', $beta, $alph, [$bckrng], '$tmpdir/slices/slc', $ip, $scl); exit;" | matlab -nodesktop -nosplash
+echo ""
 
 #__________________________________________________________________________________________#
 # merge images
