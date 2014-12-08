@@ -1,0 +1,358 @@
+#!/bin/bash
+#
+
+Usage() {
+cat << EOF
+
+    Usage: loop_movie <flin> [options]
+
+            creates an animation through a given volume or of a specified volume
+
+    OPTIONS:
+            -out                      filename of movie file
+            -x/-y/-z                  animate 3D volume by looping through the specified axis
+            -tx/-ty/-tz <slcno>       make a movie accross time for the specified slices
+            -roi <startpos> <numvol>  extract a subsample of the timeseries/volume
+            -inv                      inverse the slice looping (descending)
+            -s  <scale>
+            -delay                    time delay between frames
+            -rev                      loop back and forth
+            -tmp                      specify temporary directory
+            -keep                     don't delete temporary files
+
+            ###########################################################
+            ##   (c) wolf zinke (2008) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##       for comments and questions: wolfzinke@gmx.net   ##
+            ###########################################################
+
+EOF
+    exit 1
+}
+
+#----------------------------------------------------------------------#
+if [ $# -lt 1 ]
+then
+    Usage
+else
+    flin=`remove_ext $1`;
+    flin=`basename $flin`;
+    flpath=`dirname $1`;
+    shift
+fi
+
+#----------------------------------------------------------------------#
+# define default parameter
+outnm="${flpath}/${flin}"
+outpath="${flpath}"
+tmpdir=`tmpnam tmp_MOV`
+rm $tmpdir
+do_keep=0
+do_time=-1
+do_inv=0
+do_roi=0
+do_reverse=0
+scl=2
+tmdel=10
+vdim=""
+slcsel=""
+
+# get options
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+    -out)  outnm=`basename $2`;
+           outpath=`dirname $2`;
+           shift 2
+           ;;
+   -x)     do_time=0
+           vdim=x
+           shift
+           ;;
+   -y)     do_time=0
+           vdim=y
+           shift
+           ;;
+   -z)     do_time=0
+           vdim=z
+           shift
+           ;;
+  -tx)     do_time=1
+           slcsel="$slcsel $2"
+           for cval in $2
+           do
+              vdim="$vdim x"
+           done
+           shift 2
+           ;;
+  -ty)     do_time=1
+           slcsel="$slcsel $2"
+           for cval in $2
+           do
+              vdim="$vdim y"
+           done
+           shift 2
+           ;;
+  -tz)     do_time=1
+           slcsel="$slcsel $2"
+           for cval in $2
+           do
+              vdim="$vdim z"
+           done
+           shift 2
+           ;;
+   -roi)   svol=$2
+           volwidth=$3
+           do_roi=1
+           shift 3
+           ;;
+  -delay)  tmdel=$2
+           shift 2
+           ;;
+  -inv)    do_inv=1
+           shift
+           ;;
+  -rev)    do_reverse=1
+           shift
+           ;;
+   -s)     scl=$2
+           shift 2
+           ;;
+   -tmp)   tmpdir=$2
+           shift 2
+           ;;
+  -keep)   do_keep=1
+           shift
+           ;;
+    -*)    echo "Wrong option: <$1>"
+           echo ""
+           Usage
+           ;;
+       *)  break
+           ;;
+    esac
+done
+
+#----------------------------------------------------------------------#
+# check whether directory allready exists
+if [ -d $tmpdir ]
+then
+   rm -r $tmpdir    # delete whole directory
+fi
+
+# create temporary directory
+mkdir $tmpdir;
+
+#----------------------------------------------------------------------#
+
+if [ $do_time -lt 0 ]
+then
+    echo "ERROR: No dimension for the movie specified!"
+    echo ""
+    Usage
+elif [ $do_time -eq 0 ]
+then
+    fslroi $flpath/$flin $tmpdir/invol 0 1  # if 4D data only first volume is used
+    mkdir $tmpdir/splitvol
+    mkdir $tmpdir/imgdata
+
+    if [ $do_roi -eq 1 ]
+    then
+        case $vdim in
+          x)  echo "x Slice selection - start: $svol  width: $volwidth"
+              if [ $(($svol+$volwidth)) -gt `fslval $tmpdir/invol dim1` ]
+              then
+                  echo ""
+                  echo "ERROR: Slice selection exceeds number of slices (`fslval $tmpdir/invol dim1`)!"
+                  exit
+              fi
+              fslroi $tmpdir/invol $tmpdir/invol2 $svol $volwidth 0 `fslval $tmpdir/invol dim2` 0 `fslval $tmpdir/invol dim3`
+              imcp $tmpdir/invol2 $tmpdir/invol
+              ;;
+
+          y)  echo "y Slice selection - start: $svol  width: $volwidth"
+              if [ $(($svol+$volwidth)) -gt `fslval $tmpdir/invol dim2` ]
+              then
+                  echo ""
+                  echo "ERROR: Slice selection exceeds number of slices (`fslval $tmpdir/invol dim2`)!"
+                  exit
+              fi
+              fslroi $tmpdir/invol $tmpdir/invol2 0 `fslval $tmpdir/invol dim1` $svol $volwidth 0 `fslval $tmpdir/invol dim3`
+              imcp $tmpdir/invol2 $tmpdir/invol
+              ;;
+
+          z)  echo "z Slice selection - start: $svol  width: $volwidth"
+              if [ $(($svol+$volwidth)) -gt `fslval $tmpdir/invol dim3` ]
+              then
+                  echo ""
+                  echo "ERROR: Slice selection exceeds number of slices (`fslval $tmpdir/invol dim3`)!"
+                  exit
+              fi
+              fslroi $tmpdir/invol $tmpdir/invol2 0 `fslval $tmpdir/invol dim1` 0 `fslval $tmpdir/invol dim2` $svol $volwidth
+              imcp $tmpdir/invol2 $tmpdir/invol
+              ;;
+        esac
+    fi
+
+    fslsplit $tmpdir/invol $tmpdir/splitvol/slc_ -$vdim
+
+    fllst=`ls -1 $tmpdir/splitvol/slc_*`
+
+    num_slc=`echo "$fllst" | wc -l`
+
+    if [ $do_inv -eq 1 ]
+    then
+        cnt=$num_slc
+        stepval=-1
+    else
+        cnt=1
+        stepval=1
+    fi
+    echo "creating $num_slc frames:"
+    echo ""
+    for fnm in $fllst
+    do
+
+        if [ $cnt -lt 10 ]
+        then
+            cntstr="000$cnt"
+
+        elif [ $cnt -lt 100 ]
+        then
+            cntstr="00$cnt"
+
+        elif [ $cnt -lt 1000 ]
+        then
+            cntstr="0$cnt"
+        else
+            cntstr="$cnt"
+        fi
+
+        echo -n "$cnt  "
+
+        slicer $fnm -u -s $scl -$vdim -1 $tmpdir/splitvol/imgdt_$cntstr.png
+        convert $tmpdir/splitvol/imgdt_$cntstr.png $tmpdir/imgdata/imgdt_$cntstr.gif
+        cnt=$(($cnt+$stepval))
+    done
+
+    gif_lst=`ls -1  $tmpdir/imgdata/imgdt_*.gif`
+
+    if [ $do_reverse -eq 1 ]
+    then
+        rlst=`echo "$gif_lst " | sort -r`
+        gif_lst="$gif_lst  $rlst"
+    fi
+
+    whirlgif -time $tmdel -o ${outnm}.gif -loop 0 -time $tmdel ${gif_lst}
+else  # if  [ $do_time -eq 1]
+    num_slc=0
+    for cdim in ${vdim[*]}
+    do
+        num_slc=$(($num_slc+1))
+    done
+
+    declare -a vdim=($vdim)
+    declare -a slcsel=($slcsel)
+
+    ldim=${vdim[0]}
+    same_dim=1
+    lnbrk=""
+    slicer_str=""
+    slc_png=""
+    cnt=0
+    while [ $cnt -lt $num_slc ]
+    do
+        cdim=${vdim[$cnt]}
+        slicer_str="$slicer_str -${cdim} -${slcsel[$cnt]} $tmpdir/${cdim}_${slcsel[$cnt]}.png"
+        slc_png="$slc_png $tmpdir/${cdim}_${slcsel[$cnt]}.png"
+
+        if [ $cdim != $ldim ]
+        then
+            lnbrk="$lnbrk $cnt"
+            same_dim=0
+        fi
+        cnt=$(($cnt+1))
+    done
+
+    if [ $same_dim -eq 1 ]
+    then
+         brkpos=`Rcalc "ceiling(sqrt($num_slc))"`
+         lnbrk=`Rcalc "subset(1:$num_slc,((1:$num_slc)%%$brkpos)==0)"`
+    elif [ $num_slc -lt 4 ]
+    then
+        lnbrk=$num_slc
+    fi
+    declare -a lnbrk=($lnbrk)
+    cnt=0
+    pngapp_str=""
+    brkpos=0
+   for cpng in $slc_png
+    do
+        if [ $cnt -eq 0 ]
+        then
+            pngapp_str=$cpng
+        elif [ $cnt -eq ${lnbrk[$brkpos]} ]
+        then
+            brkpos=$(($brkpos+1))
+            pngapp_str="$pngapp_str - 10 $cpng"
+        else
+            pngapp_str="$pngapp_str + 10 $cpng"
+        fi
+        cnt=$(($cnt+1))
+    done
+
+    mkdir $tmpdir/splitvol
+    mkdir $tmpdir/imgdata
+
+    if [ $do_roi -eq 1 ]
+    then
+echo "fslroi $flpath/$flin $tmpdir/invol $svol $volwidth"
+        fslroi $flpath/$flin $tmpdir/invol $svol $volwidth
+    else
+        imcp $flpath/$flin $tmpdir/invol
+    fi
+
+    fslsplit $tmpdir/invol $tmpdir/splitvol/slc_ -t
+    fllst=`ls -1 $tmpdir/splitvol/slc_*`
+
+    cnt=1
+    for fnm in $fllst
+    do
+        if [ $cnt -lt 10 ]
+        then
+            cntstr="000$cnt"
+
+        elif [ $cnt -lt 100 ]
+        then
+            cntstr="00$cnt"
+
+        elif [ $cnt -lt 1000 ]
+        then
+            cntstr="0$cnt"
+        else
+            cntstr="$cnt"
+        fi
+
+        echo -n "$cnt  "
+
+        slicer $fnm -u -s $scl $slicer_str
+        pngappend $pngapp_str $tmpdir/imgdata/imgdt_$cntstr.gif
+        cnt=$(($cnt+1))
+    done
+    echo ""
+
+    gif_lst=`ls -1  $tmpdir/imgdata/imgdt_*.gif`
+
+    whirlgif -time $tmdel -o ${outnm}.gif -loop 0 -time $tmdel ${gif_lst}
+
+fi
+
+#----------------------------------------------------------------------#
+
+#----------------------------------------------------------------------#
+# remove temporary files
+if [ $do_keep -eq 0 ]
+then
+    rm -r $tmpdir
+fi
+
