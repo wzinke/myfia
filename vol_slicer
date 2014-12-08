@@ -351,7 +351,6 @@ Xsz=$xmx
 Ysz=$ymx
 Zsz=$zmx
 
-
 # determine point size of text according to image size
 # maxsz=$(echo "max(c($Xsz,$Ysz,$Zsz))" | R --vanilla --slave | cut -d' ' -f2)
 # maxsz=$(echo "RES=max( [$Xsz,$Ysz,$Zsz]); disp(RES);" | octave --silent --no-window-system -f -H)
@@ -363,7 +362,6 @@ if [ $ptsz -lt 10 ]
 then
     ptsz=10
 fi
-
 
 if [ $get_pxl -eq 1 ]
 then
@@ -932,6 +930,7 @@ then
         pngappend $outnm - $tmpdir/zinfo.png $outnm
     fi
 fi
+
 #----------------------------------------------------------------------#
 if [ $do_keep -eq 0 ]
 then
