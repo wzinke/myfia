@@ -531,6 +531,7 @@ fslmaths $bg_img -mul 0 -add 1 $tmpdir/all_slices -odt char
 png_str=""
 set_cnt=0
 
+
 if [ $SglVXL -eq 1 ]
 then
     fslmaths $bg_img -mul 0 -add 1 $tmpdir/allone -odt char
