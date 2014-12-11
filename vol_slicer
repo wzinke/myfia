@@ -267,7 +267,7 @@ then
             cnslc=$(echo "$cslc - $xmn " | bc -l)
             nslc="$nslc $cnslc "
         else
-            nslc="$nslc $cnslc "
+            nslc="$nslc $cslc "
         fi
     done
     xslc="$nslc"
@@ -299,7 +299,7 @@ then
             cnslc=$(echo "$cslc - $ymn " | bc -l)
             nslc="$nslc $cnslc "
         else
-            nslc="$nslc $cnslc "
+            nslc="$nslc $cslc "
         fi
     done
     yslc="$nslc"
@@ -331,7 +331,7 @@ then
             cnslc=$(echo "$cslc - $zmn " | bc -l)
             nslc="$nslc $cnslc "
         else
-            nslc="$nslc $cnslc "
+            nslc="$nslc $cslc "
         fi
     done
     zslc="$nslc"
@@ -503,6 +503,7 @@ fi
 if [ "$zstr" ]
 then
     nslc=""
+
     for cslc in $zslc
     do
         if [ $(echo "$cslc < 1" | bc -l) -eq 1 ]
