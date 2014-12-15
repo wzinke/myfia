@@ -267,7 +267,7 @@ then
             cnslc=$(echo "$cslc - $xmn " | bc -l)
             nslc="$nslc $cnslc "
         else
-            nslc="$nslc $cnslc "
+            nslc="$nslc $cslc "
         fi
     done
     xslc="$nslc"
@@ -299,7 +299,7 @@ then
             cnslc=$(echo "$cslc - $ymn " | bc -l)
             nslc="$nslc $cnslc "
         else
-            nslc="$nslc $cnslc "
+            nslc="$nslc $cslc "
         fi
     done
     yslc="$nslc"
@@ -331,7 +331,7 @@ then
             cnslc=$(echo "$cslc - $zmn " | bc -l)
             nslc="$nslc $cnslc "
         else
-            nslc="$nslc $cnslc "
+            nslc="$nslc $cslc "
         fi
     done
     zslc="$nslc"
@@ -351,7 +351,6 @@ Xsz=$xmx
 Ysz=$ymx
 Zsz=$zmx
 
-
 # determine point size of text according to image size
 # maxsz=$(echo "max(c($Xsz,$Ysz,$Zsz))" | R --vanilla --slave | cut -d' ' -f2)
 # maxsz=$(echo "RES=max( [$Xsz,$Ysz,$Zsz]); disp(RES);" | octave --silent --no-window-system -f -H)
@@ -363,7 +362,6 @@ if [ $ptsz -lt 10 ]
 then
     ptsz=10
 fi
-
 
 if [ $get_pxl -eq 1 ]
 then
@@ -505,6 +503,7 @@ fi
 if [ "$zstr" ]
 then
     nslc=""
+
     for cslc in $zslc
     do
         if [ $(echo "$cslc < 1" | bc -l) -eq 1 ]
@@ -531,6 +530,7 @@ fslmaths $bg_img -mul 0 -add 1 $tmpdir/all_slices -odt char
 
 png_str=""
 set_cnt=0
+
 
 if [ $SglVXL -eq 1 ]
 then
@@ -569,7 +569,7 @@ then
     then
         if [ $do_neg -eq 1 ]
         then
-            smint=`fslstats $statmap -a   -r`
+            smint=`fslstats $statmap -a -r`
         else
             if [ $no_min -eq 1 ]
             then
@@ -932,6 +932,7 @@ then
         pngappend $outnm - $tmpdir/zinfo.png $outnm
     fi
 fi
+
 #----------------------------------------------------------------------#
 if [ $do_keep -eq 0 ]
 then

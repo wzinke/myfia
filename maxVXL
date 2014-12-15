@@ -159,11 +159,11 @@ then
     if [ $do_min -eq 0 ]
     then
         pthr=$(fslstats $ifl $maskstat -p $thr)
-        fslmaths $ifl -thr $pthr $ofl -odt char
+        fslmaths $ifl -thr $pthr $ofl
     else
         thr=$(echo "100 - $thr" | bc -l)
         pthr=$(fslstats $ifl $maskstat -p $thr)
-        fslmaths $ifl -uthr $pthr $ofl -odt char
+        fslmaths $ifl -uthr $pthr $ofl
     fi
 else
     fslmeants -i $ifl $maskts --showall --transpose -o $tmpdir/vxllst.dat

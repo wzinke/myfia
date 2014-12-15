@@ -20,6 +20,7 @@ cat << EOF
             -fout   provide full output files
             -z      threshold of z maps (default `ptoz 0.01`)
             -p      cluster p-threshold for significance (default 0.01)
+            -c      filename of input cope volume (NIY!)
             -conn   connectivity of voxels (default 26)
             -neg    apply two sided cluster thresholding
             -pf     prefix
@@ -57,6 +58,7 @@ fllst=""
 get_fl=1
 fl_dir=`pwd`
 odir=clust_thr
+copestr=""
 prefix=''
 suffix=''
 matCLstr="" # not active right now
@@ -181,6 +183,8 @@ do
     fi
 
     cluster -i $tmpdir/thresh_zmap -t $zthr -p $pthr -d $DLH --volume=$VOLUME --othresh=$onm --connectivity=$c --olmaxim=${onm}_lmax --mm  --minclustersize $matCLstr $outstr > ${onm}_cluster.txt
+
+# cluster -i thresh_zstat12 -c stats/cope12 -t 2.3 -p 0.05 -d 0.0708704 --volume=206269 --othresh=thresh_zstat12 -o cluster_mask_zstat12 --connectivity=26 --mm --olmax=lmax_zstat12_std.txt --scalarname=Z > cluster_zstat12_std.txt
 
     if [ $do_neg -eq 1 ]
     then

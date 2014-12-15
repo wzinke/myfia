@@ -50,6 +50,7 @@ exit 1
 # TODO: Apply smmothing only to the volumes used for coregistrtion but not for averagging
 # TODO: use susan for smoothing
 # TODO: Option for non-linear co-registration
+# TODO: keep transformation matrices
 
 if [ $# -lt 1 ]; then
     Usage
@@ -462,7 +463,6 @@ then
     roivol=$(fslstats $last_head -w)
     fslroi $outnm $outnm $roivol
 fi
-
 
 #__________________________________________________________________________________________#
 if [ $keep_tmp -eq 0 ]
