@@ -526,7 +526,7 @@ fi
 
 #----------------------------------------------------------------------#
 # get the slice representation
-fslmaths $bg_img -mul 0 -add 1 $tmpdir/all_slices -odt char
+$FSLDIR/bin/fslmaths $bg_img -mul 0 -add 1 $tmpdir/all_slices -odt char
 
 png_str=""
 set_cnt=0
@@ -534,7 +534,7 @@ set_cnt=0
 
 if [ $SglVXL -eq 1 ]
 then
-    fslmaths $bg_img -mul 0 -add 1 $tmpdir/allone -odt char
+    $FSLDIR/bin/fslmaths $bg_img -mul 0 -add 1 $tmpdir/allone -odt char
 
     if [ $do_thick -eq 1 ]
     then
@@ -547,14 +547,14 @@ then
         cZ=$zslc
     fi
 
-    fslmaths $tmpdir/all_slices -roi 0   $Xsz     $cY $slcwdth $cZ $slcwdth 0 1 $tmpdir/xslcsel
-    fslmaths $tmpdir/all_slices -roi $cX $slcwdth 0   $Ysz     $cZ $slcwdth 0 1 $tmpdir/yslcsel
-    fslmaths $tmpdir/all_slices -roi $cX $slcwdth $cY $slcwdth 0   $Zsz     0 1 $tmpdir/zslcsel
+    $FSLDIR/bin/fslmaths $tmpdir/all_slices -roi 0   $Xsz     $cY $slcwdth $cZ $slcwdth 0 1 $tmpdir/xslcsel
+    $FSLDIR/bin/fslmaths $tmpdir/all_slices -roi $cX $slcwdth 0   $Ysz     $cZ $slcwdth 0 1 $tmpdir/yslcsel
+    $FSLDIR/bin/fslmaths $tmpdir/all_slices -roi $cX $slcwdth $cY $slcwdth 0   $Zsz     0 1 $tmpdir/zslcsel
 \
-    fslmaths $tmpdir/xslcsel -add $tmpdir/yslcsel -add $tmpdir/zslcsel $tmpdir/slcsel
-    overlay 0 1 $bg_img $bgint $tmpdir/slcsel 1 4 $tmpdir/slc_vol
+    $FSLDIR/bin/fslmaths $tmpdir/xslcsel -add $tmpdir/yslcsel -add $tmpdir/zslcsel $tmpdir/slcsel
+    $FSLDIR/bin/overlay 0 1 $bg_img $bgint $tmpdir/slcsel 1 4 $tmpdir/slc_vol
 
-    slicer $tmpdir/slc_vol -s $slcsc $sdlbl -x -$xslc $tmpdir/selX.png -y -$yslc $tmpdir/selY.png -z -$zslc $tmpdir/selZ.png
+    $FSLDIR/bin/slicer $tmpdir/slc_vol -s $slcsc $sdlbl -x -$xslc $tmpdir/selX.png -y -$yslc $tmpdir/selY.png -z -$zslc $tmpdir/selZ.png
 
     convert $tmpdir/selX.png -trim $tmpdir/selX.png
     convert $tmpdir/selY.png -trim $tmpdir/selY.png
@@ -573,11 +573,11 @@ then
         else
             if [ $no_min -eq 1 ]
             then
-                fslmaths $statmap -thr $smint_min -bin $tmpdir/uthrmask -odt char
+                $FSLDIR/bin/fslmaths $statmap -thr $smint_min -bin $tmpdir/uthrmask -odt char
                 smint=`fslstats $statmap -k $tmpdir/uthrmask -r`
                 smint="$smint_min $(echo $smint | cut -d' ' -f2)"
             else
-                fslmaths $statmap -thr $smint_min -bin $tmpdir/uthrmask -odt char
+                $FSLDIR/bin/fslmaths $statmap -thr $smint_min -bin $tmpdir/uthrmask -odt char
                 smint=`fslstats $statmap -k $tmpdir/uthrmask -r`
             fi
         fi
@@ -589,7 +589,7 @@ then
 
     if [ $rngdiff -eq 0 ]
     then
-        imcp $bg_img $tmpdir/curr_img
+        $FSLDIR/bin/imcp $bg_img $tmpdir/curr_img
     else
         statstr=""
         cnt=0
@@ -608,7 +608,7 @@ then
                 echo "WARNING: negative map could only be used with one statistical map as input"
                 echo ""
             else
-                fslmaths $statmap -mul -1 $tmpdir/negmap
+                $FSLDIR/bin/fslmaths $statmap -mul -1 $tmpdir/negmap
                 statstr="$statstr $tmpdir/negmap $smint"
             fi
         fi
@@ -621,26 +621,26 @@ then
 
         if [ $doCX -eq 1 ]
         then
-            overlay $trans 0 $bg_img $bgint $statstr $tmpdir/slcsel 1 4 $tmpdir/curr_img
+            $FSLDIR/bin/overlay $trans 0 $bg_img $bgint $statstr $tmpdir/slcsel 1 4 $tmpdir/curr_img
         else
-            overlay $trans 0 $bg_img $bgint $statstr $tmpdir/curr_img
+            $FSLDIR/bin/overlay $trans 0 $bg_img $bgint $statstr $tmpdir/curr_img
         fi
     fi
 #     echo  "statmap:   $statmap" >> $slcfl
 #     echo  "statrange: $smint  " >> $slcfl
 elif [ $doCX -eq 1 ]
 then
-    overlay $trans 0 $bg_img $bgint $statstr $tmpdir/slcsel 1 4 $tmpdir/curr_img
+    $FSLDIR/bin/overlay $trans 0 $bg_img $bgint $statstr $tmpdir/slcsel 1 4 $tmpdir/curr_img
 else
-    imcp $bg_img $tmpdir/curr_img
+    $FSLDIR/bin/imcp $bg_img $tmpdir/curr_img
 fi
 
 #----------------------------------------------------------------------#
 # X
 if [ $numX -gt 0 ]
 then
-    origMM=`fslhd $bg_img | grep sto_xyz:1 | awk ' { if($5>=0) { print $5} else {print $5*-1 }}'`
-    vxlres=`fslval $bg_img pixdim1`
+    origMM=$($FSLDIR/bin/fslhd $bg_img | grep sto_xyz:1 | awk ' { if($5>=0) { print $5} else {print $5*-1 }}')
+    vxlres=$($FSLDIR/bin/fslval $bg_img pixdim1)
     origVXL=` echo "$origMM / $vxlres" | bc -l | awk ' { printf  "%.0f\n", $0 } '`
 
     xstr="X slices [mm]:"
@@ -648,7 +648,7 @@ then
 #    xslices=""
     if [ $SglVXL -eq 0 ]
     then
-        fslmaths $tmpdir/all_slices -mul 0 $tmpdir/xslcsel -odt char
+        $FSLDIR/bin/fslmaths $tmpdir/all_slices -mul 0 $tmpdir/xslcsel -odt char
     fi
 
     cnt=0
@@ -663,7 +663,7 @@ then
             exit
         fi
 
-        slicer $tmpdir/curr_img -s $scl -u -x -$cslc $tmpdir/X_${cslc}.png
+        $FSLDIR/bin/slicer $tmpdir/curr_img -s $scl -u -x -$cslc $tmpdir/X_${cslc}.png
 
         cvxlMM=`echo "($origVXL - $cslc) * $vxlres" | bc -l | awk ' { printf  "%6.2f\n", $0 } ' `
         mmX=$cvxlMM
@@ -679,7 +679,7 @@ then
         then
             cp $tmpdir/X_${cslc}.png $tmpdir/Xset.png
         else
-            pngappend $tmpdir/Xset.png + $pxl $tmpdir/X_${cslc}.png $tmpdir/Xset.png
+            $FSLDIR/bin/pngappend $tmpdir/Xset.png + $pxl $tmpdir/X_${cslc}.png $tmpdir/Xset.png
         fi
 
         if [ $do_thick -eq 1 ]
@@ -689,8 +689,8 @@ then
 
         if [ $SglVXL -eq 0 ]
         then
-            fslmaths $tmpdir/all_slices -roi $cslc $slcwdth 0 $Ysz 0 $Zsz 0 1 $tmpdir/tmp_slcsel
-            fslmaths $tmpdir/xslcsel -add $tmpdir/tmp_slcsel $tmpdir/xslcsel
+            $FSLDIR/bin/fslmaths $tmpdir/all_slices -roi $cslc $slcwdth 0 $Ysz 0 $Zsz 0 1 $tmpdir/tmp_slcsel
+            $FSLDIR/bin/fslmaths $tmpdir/xslcsel -add $tmpdir/tmp_slcsel $tmpdir/xslcsel
         fi
     done
 
@@ -699,11 +699,11 @@ then
 
     if [ $SglVXL -eq 0 ]
     then
-        overlay 0 1 $bg_img $bgint $tmpdir/xslcsel 1 4 $tmpdir/Xslc_vol
+        $FSLDIR/bin/overlay 0 1 $bg_img $bgint $tmpdir/xslcsel 1 4 $tmpdir/Xslc_vol
 
-        slicer    $tmpdir/Xslc_vol -s $slcsc $sdlbl -y 0.5   $tmpdir/XselY.png -z 0.5 $tmpdir/XselZ.png
-        pngappend $tmpdir/XselY.png - 0   $tmpdir/XselZ.png $tmpdir/Xsel.png
-        pngappend $tmpdir/Xsel.png + $pxl $tmpdir/Xset.png  $tmpdir/Xset.png
+        $FSLDIR/bin/slicer    $tmpdir/Xslc_vol -s $slcsc $sdlbl -y 0.5   $tmpdir/XselY.png -z 0.5 $tmpdir/XselZ.png
+        $FSLDIR/bin/pngappend $tmpdir/XselY.png - 0   $tmpdir/XselZ.png $tmpdir/Xsel.png
+        $FSLDIR/bin/pngappend $tmpdir/Xsel.png + $pxl $tmpdir/Xset.png  $tmpdir/Xset.png
     fi
 
     png_str="$png_str $tmpdir/Xset.png"
@@ -713,16 +713,16 @@ fi
 # Y
 if [ $numY -gt 0 ]
 then
-    origMM=`fslhd $bg_img | grep sto_xyz:2 | awk ' { if($5>=0) { print $5} else {print $5*-1 }}'`
-    vxlres=`fslval $bg_img pixdim2`
-    origVXL=` echo "$origMM / $vxlres" | bc -l | awk ' { printf  "%.0f\n", $0 } '`
+    origMM=$($FSLDIR/bin/fslhd $bg_img | grep sto_xyz:2 | awk ' { if($5>=0) { print $5} else {print $5*-1 }}')
+    vxlres=$($FSLDIR/bin/fslval $bg_img pixdim2)
+    origVXL=$(echo "$origMM / $vxlres" | bc -l | awk ' { printf  "%.0f\n", $0 } ')
 
     ystr="Y slices [mm]:"
 
 #    yslices=""
     if [ $SglVXL -eq 0 ]
     then
-        fslmaths $tmpdir/all_slices -mul 0 $tmpdir/yslcsel -odt char
+        $FSLDIR/bin/fslmaths $tmpdir/all_slices -mul 0 $tmpdir/yslcsel -odt char
     fi
 
     cnt=0
@@ -737,11 +737,11 @@ then
             exit
         fi
 
-        slicer $tmpdir/curr_img -s $scl -u -y -$cslc $tmpdir/Y_${cslc}.png
+        $FSLDIR/bin/slicer $tmpdir/curr_img -s $scl -u -y -$cslc $tmpdir/Y_${cslc}.png
 
-        cvxlMM=`echo "($cslc - $origVXL) * $vxlres" | bc -l | awk ' { printf  "%6.2f\n", $0 } ' `
+        cvxlMM=$(echo "($cslc - $origVXL) * $vxlres" | bc -l | awk ' { printf  "%6.2f\n", $0 } ')
         mmY=$cvxlMM
-        ystr=`echo "$ystr  $cvxlMM;"`
+        ystr=$(echo "$ystr  $cvxlMM;")
 
         if [ $doMM -eq 1 ]
         then
@@ -753,7 +753,7 @@ then
         then
             cp $tmpdir/Y_${cslc}.png $tmpdir/Yset.png
         else
-            pngappend $tmpdir/Yset.png + $pxl $tmpdir/Y_${cslc}.png $tmpdir/Yset.png
+            $FSLDIR/bin/pngappend $tmpdir/Yset.png + $pxl $tmpdir/Y_${cslc}.png $tmpdir/Yset.png
         fi
 
         if [ $do_thick -eq 1 ]
@@ -763,8 +763,8 @@ then
 
         if [ $SglVXL -eq 0 ]
         then
-            fslmaths $tmpdir/all_slices -roi 0 $Xsz $cslc $slcwdth 0 $Zsz 0 1 $tmpdir/tmp_slcsel
-            fslmaths $tmpdir/yslcsel -add $tmpdir/tmp_slcsel $tmpdir/yslcsel
+            $FSLDIR/bin/fslmaths $tmpdir/all_slices -roi 0 $Xsz $cslc $slcwdth 0 $Zsz 0 1 $tmpdir/tmp_slcsel
+            $FSLDIR/bin/fslmaths $tmpdir/yslcsel -add $tmpdir/tmp_slcsel $tmpdir/yslcsel
         fi
     done
 
@@ -773,11 +773,11 @@ then
 
     if [ $SglVXL -eq 0 ]
     then
-        overlay 0 1 $bg_img $bgint $tmpdir/yslcsel 1 4 $tmpdir/Yslc_vol
+        $FSLDIR/bin/overlay 0 1 $bg_img $bgint $tmpdir/yslcsel 1 4 $tmpdir/Yslc_vol
 
-        slicer    $tmpdir/Yslc_vol -s $slcsc $sdlbl -x 0.4   $tmpdir/YselX.png -z 0.6 $tmpdir/YselZ.png
-        pngappend $tmpdir/YselX.png - 0    $tmpdir/YselZ.png $tmpdir/Ysel.png
-        pngappend $tmpdir/Ysel.png  + $pxl $tmpdir/Yset.png  $tmpdir/Yset.png
+        $FSLDIR/bin/slicer    $tmpdir/Yslc_vol -s $slcsc $sdlbl -x 0.4   $tmpdir/YselX.png -z 0.6 $tmpdir/YselZ.png
+        $FSLDIR/bin/pngappend $tmpdir/YselX.png - 0    $tmpdir/YselZ.png $tmpdir/Ysel.png
+        $FSLDIR/bin/pngappend $tmpdir/Ysel.png  + $pxl $tmpdir/Yset.png  $tmpdir/Yset.png
     fi
 
     png_str="$png_str $tmpdir/Yset.png"
@@ -787,16 +787,16 @@ fi
 # Z
 if [ $numZ -gt 0 ]
 then
-    origMM=`fslhd $bg_img | grep sto_xyz:3 | awk ' { if($5>=0) { print $5} else {print $5*-1 }}'`
-    vxlres=`fslval $bg_img pixdim3`
-    origVXL=` echo "$origMM / $vxlres" | bc -l | awk ' { printf  "%.0f\n", $0 } '`
+    origMM=$($FSLDIR/bin/fslhd $bg_img | grep sto_xyz:3 | awk ' { if($5>=0) { print $5} else {print $5*-1 }}')
+    vxlres=$($FSLDIR/bin/fslval $bg_img pixdim3)
+    origVXL=$(echo "$origMM / $vxlres" | bc -l | awk ' { printf  "%.0f\n", $0 } ')
 
     zstr="Z slices [mm]:"
 
 #    zslices=""
     if [ $SglVXL -eq 0 ]
     then
-        fslmaths $tmpdir/all_slices -mul 0 $tmpdir/zslcsel -odt char
+        $FSLDIR/bin/fslmaths $tmpdir/all_slices -mul 0 $tmpdir/zslcsel -odt char
     fi
     cnt=0
     for cslc in $zslc
@@ -810,11 +810,11 @@ then
             exit
         fi
 
-        slicer $tmpdir/curr_img -s $scl -u -z -$cslc $tmpdir/Z_${cslc}.png
+        $FSLDIR/bin/slicer $tmpdir/curr_img -s $scl -u -z -$cslc $tmpdir/Z_${cslc}.png
 
-        cvxlMM=`echo "($cslc - $origVXL) * $vxlres" | bc -l | awk ' { printf  "%6.2f\n", $0 } ' `
+        cvxlMM=$(echo "($cslc - $origVXL) * $vxlres" | bc -l | awk ' { printf  "%6.2f\n", $0 } ')
         mmZ=$cvxlMM
-        zstr=`echo "$zstr  $cvxlMM;"`
+        zstr=$(echo "$zstr  $cvxlMM;")
 
         if [ $doMM -eq 1 ]
         then
@@ -826,7 +826,7 @@ then
         then
             cp $tmpdir/Z_${cslc}.png $tmpdir/Zset.png
         else
-            pngappend $tmpdir/Zset.png + $pxl $tmpdir/Z_${cslc}.png $tmpdir/Zset.png
+            $FSLDIR/bin/pngappend $tmpdir/Zset.png + $pxl $tmpdir/Z_${cslc}.png $tmpdir/Zset.png
         fi
 
         if [ $do_thick -eq 1 ]
@@ -836,8 +836,8 @@ then
 
         if [ $SglVXL -eq 0 ]
         then
-            fslmaths $tmpdir/all_slices -roi 0 $Xsz 0 $Ysz $cslc $slcwdth 0 1 $tmpdir/tmp_slcsel
-            fslmaths $tmpdir/zslcsel -add $tmpdir/tmp_slcsel $tmpdir/zslcsel
+            $FSLDIR/bin/fslmaths $tmpdir/all_slices -roi 0 $Xsz 0 $Ysz $cslc $slcwdth 0 1 $tmpdir/tmp_slcsel
+            $FSLDIR/bin/fslmaths $tmpdir/zslcsel -add $tmpdir/tmp_slcsel $tmpdir/zslcsel
         fi
     done
 
@@ -846,11 +846,11 @@ then
 
     if [ $SglVXL -eq 0 ]
     then
-        overlay 0 1 $bg_img $bgint $tmpdir/zslcsel 1 4 $tmpdir/Zslc_vol
+        $FSLDIR/bin/overlay 0 1 $bg_img $bgint $tmpdir/zslcsel 1 4 $tmpdir/Zslc_vol
 
-        slicer $tmpdir/Zslc_vol -s $slcsc  $sdlbl -x 0.4     $tmpdir/ZselX.png -y 0.5 $tmpdir/ZselY.png
-        pngappend $tmpdir/ZselX.png - 0    $tmpdir/ZselY.png $tmpdir/Zsel.png
-        pngappend $tmpdir/Zsel.png  + $pxl $tmpdir/Zset.png  $tmpdir/Zset.png
+        $FSLDIR/bin/slicer $tmpdir/Zslc_vol -s $slcsc  $sdlbl -x 0.4     $tmpdir/ZselX.png -y 0.5 $tmpdir/ZselY.png
+        $FSLDIR/bin/pngappend $tmpdir/ZselX.png - 0    $tmpdir/ZselY.png $tmpdir/Zsel.png
+        $FSLDIR/bin/pngappend $tmpdir/Zsel.png  + $pxl $tmpdir/Zset.png  $tmpdir/Zset.png
     fi
 
     png_str="$png_str $tmpdir/Zset.png"
@@ -870,9 +870,9 @@ then
     then
         text2png "-${zthr[0]}" $tmpdir/nlowZ.gif $ptsz
         text2png "-${zthr[1]}" $tmpdir/nhigh.gif $ptsz
-        pngappend $tmpdir/nhigh.gif + 5 $FSLDIR/etc/luts/ramp2.gif + 10 $tmpdir/nlowZ.gif + 25 $tmpdir/lowZ.gif + 5 $FSLDIR/etc/luts/ramp.gif + 5 $tmpdir/high.gif $tmpdir/zinfo.gif
+        $FSLDIR/bin/pngappend $tmpdir/nhigh.gif + 5 $FSLDIR/etc/luts/ramp2.gif + 10 $tmpdir/nlowZ.gif + 25 $tmpdir/lowZ.gif + 5 $FSLDIR/etc/luts/ramp.gif + 5 $tmpdir/high.gif $tmpdir/zinfo.gif
     else
-        pngappend $tmpdir/lowZ.gif + 5 $FSLDIR/etc/luts/ramp.gif + 5 $tmpdir/high.gif $tmpdir/zinfo.gif
+        $FSLDIR/bin/pngappend $tmpdir/lowZ.gif + 5 $FSLDIR/etc/luts/ramp.gif + 5 $tmpdir/high.gif $tmpdir/zinfo.gif
     fi
 
     convert $tmpdir/zinfo.gif $tmpdir/zinfo.png
@@ -891,20 +891,20 @@ then
         text2png "$ystr" $tmpdir/Yvxlpos.png $ptsz
         text2png "$zstr" $tmpdir/Zvxlpos.png $ptsz
 
-        pngappend $tmpdir/Xvxlpos.png - 5 $tmpdir/Yvxlpos.png - 5 $tmpdir/Zvxlpos.png $tmpdir/slcinfo.png
+        $FSLDIR/bin/pngappend $tmpdir/Xvxlpos.png - 5 $tmpdir/Yvxlpos.png - 5 $tmpdir/Zvxlpos.png $tmpdir/slcinfo.png
 
-        pngappend $tmpdir/selY.png   -  2 $tmpdir/selZ.png    $tmpdir/SLCsel.png
-        pngappend $tmpdir/selX.png   - 20 $tmpdir/slcinfo.png $tmpdir/SLCsel2.png
-        pngappend $tmpdir/SLCsel.png +  2 $tmpdir/SLCsel2.png $tmpdir/SLCsel.png
+        $FSLDIR/bin/pngappend $tmpdir/selY.png   -  2 $tmpdir/selZ.png    $tmpdir/SLCsel.png
+        $FSLDIR/bin/pngappend $tmpdir/selX.png   - 20 $tmpdir/slcinfo.png $tmpdir/SLCsel2.png
+        $FSLDIR/bin/pngappend $tmpdir/SLCsel.png +  2 $tmpdir/SLCsel2.png $tmpdir/SLCsel.png
 
         if [ $ovly_stat -eq 1 ]
         then
-            pngappend $tmpdir/SLCsel.png - 6 $tmpdir/zinfo.png $tmpdir/SLCsel.png
+            $FSLDIR/bin/pngappend $tmpdir/SLCsel.png - 6 $tmpdir/zinfo.png $tmpdir/SLCsel.png
         fi
 
-        pngappend $tmpdir/Yset.png - 0 $tmpdir/Zset.png   $tmpdir/tmp_out1.png
-        pngappend $tmpdir/Xset.png - 5 $tmpdir/SLCsel.png $tmpdir/tmp_out2.png
-        pngappend $tmpdir/tmp_out1.png + 0 $tmpdir/tmp_out2.png $outnm
+        $FSLDIR/bin/pngappend $tmpdir/Yset.png - 0 $tmpdir/Zset.png   $tmpdir/tmp_out1.png
+        $FSLDIR/bin/pngappend $tmpdir/Xset.png - 5 $tmpdir/SLCsel.png $tmpdir/tmp_out2.png
+        $FSLDIR/bin/pngappend $tmpdir/tmp_out1.png + 0 $tmpdir/tmp_out2.png $outnm
     else
         cnt=0
         for cstr in $png_str
@@ -929,7 +929,7 @@ if [ $SglVXL -eq 0 ]
 then
     if [ $ovly_stat -eq 1 ]
     then
-        pngappend $outnm - $tmpdir/zinfo.png $outnm
+        $FSLDIR/bin/pngappend $outnm - $tmpdir/zinfo.png $outnm
     fi
 fi
 
