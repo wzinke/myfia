@@ -39,7 +39,7 @@ fi
 #__________________________________________________________________________________________#
 itv=1
 runloc=0
-nproc=1
+nprocs=-1
 waitend=1
 
 while [ $# -gt 0 ] ;
@@ -67,6 +67,11 @@ do
     esac
 done
 
+if [ $nprocs -eq -1 ]
+then
+    nprocs=$(grep -c ^processor /proc/cpuinfo 2>/dev/null || sysctl -n hw.ncpu)
+fi
+
 #__________________________________________________________________________________________#
 
 for csub in $sbmfl
@@ -85,7 +90,7 @@ do
     echo ">> Processing: $csub"
     if [ $runloc -eq 0 ]
     then
-            jid=`condor_submit $csub`
+            jid=$(condor_submit $csub)
             echo "$jid"
 
             prid=`echo "$jid" | cut -d. -f1 | cut -d' ' -f6`
@@ -97,7 +102,7 @@ do
             procrun=1
             while [ $procrun -gt 0 ]
             do
-                if [ `condor_q | tail -1 | cut -d' ' -f2 | cut -d';' -f1` == 'jobs' ]
+                if [ $(condor_q | tail -1 | cut -d' ' -f2 | cut -d';' -f1) == 'jobs' ]
                 then
                     procrun=0
                     for cprid in $prid
@@ -138,7 +143,7 @@ do
 
                 echo -n "$jobcnt/$nunjobs ... "
 
-                while [ `echo "$jobstr" | wc -w` -gt $nproc ]
+                while [ `echo "$jobstr" | wc -w` -gt $nprocs ]
                 do
                     sleep $itv
 
@@ -158,8 +163,8 @@ do
 
                 case $cID in
                     request_cpus)   reqcpu=$cvalue
-                                    nproc=`echo "($nproc / $reqcpu) + 0.5" | bc -l | xargs printf "%1.0f"`
-                                    echo "Using $nproc threads."
+                                    nprocs=`echo "($nprocs / $reqcpu) + 0.5" | bc -l | xargs printf "%1.0f"`
+                                    echo "Using $nprocs threads."
                                     ;;
                     Executable)     ccmd=$cvalue
                                     echo "executing command $ccmd"

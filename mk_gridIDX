@@ -1,0 +1,147 @@
+#!/bin/bash
+#
+# mk_gridIDX
+#
+# created: 29.12.2014
+# by zinke
+#
+
+Usage() {
+cat << EOF
+
+    Usage: $0 <gridfile> [options]
+
+    Code grid locations as integer values. Assumes a Crist style grid with
+    7x7 locations. Indexing starts at medial-frontal grid corner. The grid
+    location is defined by the sum of A/P position (times 100) and M/L position.
+    Thus, possible values will be in the range of 101 to 1414, i.e. the last
+    two numbers code M/L, the first one to two numbers code the A/P line.
+
+
+    OPTIONS:
+            -sz     width of a grid line (default is 4, i.e. two voxels for
+                    the grid hole and two voxel for the spacing between holes)
+            -n      number of grid lines (default: 15)
+            -ap     what image dimension corresponds to the A/P axis (default: y)
+            -hemi   hemisphere of the chamber (default: r)
+            -o      file name of output file
+            -keep   do not delete temporary files
+
+            ###########################################################
+            ##   (c) wolf zinke (2014) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+
+EOF
+exit 1
+
+}
+
+if [ $# -lt 1 ]; then
+    Usage
+else
+    gridfile=$(remove_ext $1)
+    shift
+fi
+
+tmpdir=`tmpnam tmpIDX`
+rm    $tmpdir
+mkdir $tmpdir
+
+#__________________________________________________________________________________________#
+sz=4
+Ng=15
+ofl="${gridfile}_idx"
+ap="y"
+hemi="r"
+do_keep=0
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+          -o)   ofl=$2
+                shift 2
+                ;;
+         -sz)   sz=$2
+                shift 2
+                ;;
+          -n)   Ng=$2
+                shift 2
+                ;;
+         -ap)   ap=$(echo $2 | awk '{print tolower($0)}')
+                shift 2
+                ;;
+       -hemi)   hemi=$(echo $2 | awk '{print tolower($0)}')
+                shift 2
+                ;;
+       -keep)   do_keep=1
+                echo "tmp dir: $tmpdir"
+                shift
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+#__________________________________________________________________________________________#
+
+if [ $ap == 'y' ]
+then
+    Yfac=100
+    Xfac=1
+else
+    Yfac=1
+    Xfac=100
+fi
+
+if [ $hemi == 'r' ]
+then
+    Cfac=1
+else
+    Cfac=-1
+fi
+
+
+fslmaths ${gridfile} -mul 0 $tmpdir/Ygrids -odt int
+imcp     $tmpdir/Ygrids $tmpdir/Xgrids
+fslmaths $tmpdir/Ygrids -add 1 $tmpdir/all_one -odt int
+
+Groi=$(fslstats gridrepres -w)
+
+sX=$(echo $Groi | cut -d' ' -f1)
+sY=$(echo $Groi | cut -d' ' -f3)
+sW=$(echo $Groi | cut -d' ' -f4)
+sY=$(($sY + $sW))
+
+dX=$(fslval ${gridfile} dim1)
+dY=$(fslval ${gridfile} dim2)
+dZ=$(fslval ${gridfile} dim3)
+
+for cnt in $(seq $Ng)
+do
+    Xvxl=$(echo "$Cfac * $sz * ($cnt - 1) + $sX" | bc -l)
+    Yvxl=$(echo "   -1 * $sz * ($cnt)     + $sY" | bc -l)
+
+    Xval=$(echo "$Xfac * $cnt" | bc -l)
+    Yval=$(echo "$Yfac * $cnt" | bc -l)
+
+    echo "$Xvxl [$Xval]  -  $Yvxl [$Yval]"
+
+    fslmaths $tmpdir/all_one -roi $Xvxl $sz 0 $dY 0 $dZ 0 1 -mul $Xval -add $tmpdir/Xgrids $tmpdir/Xgrids -odt int
+    fslmaths $tmpdir/all_one -roi 0 $dX $Yvxl $sz 0 $dZ 0 1 -mul $Yval -add $tmpdir/Ygrids $tmpdir/Ygrids -odt int
+done
+
+fslmaths $tmpdir/Xgrids -add $tmpdir/Ygrids -mas $gridfile $ofl -odt int
+
+#__________________________________________________________________________________________#
+if [ $do_keep -eq 0 ]
+then
+    rm -r $tmpdir
+fi
+
