@@ -32,7 +32,15 @@ exit 1
 if [ $# -lt 1 ]; then
     Usage
 else
-    sbmfl=$1;
+    sbmfl=$1
+    if [ $(echo $OSTYPE | grep linux | wc -w) -eq 0 ]
+    then
+        tmpfl=$(tmpnam /tmp/MacSubmit)
+#         iconv --from-code=UTF-8 --to-code=MAC $sbmfl
+        awk '{ gsub("\r", "\n"); print $0;}' $sbmfl > $sbmfl
+#       tr '\n' '\r' < $sbmfl > $tmpfl
+    fi
+
     shift
 fi
 
@@ -158,8 +166,8 @@ do
                     done
                 done
             else # check for relevant keywords
-                cID=`   echo $cstr  | cut -d= -f1 | sed -e 's/^[ \t]*//;s/[ \t]*$//'`
-                cvalue=`echo $cstr  | cut -d= -f2 | sed "s/\"//g" | sed -e 's/^[ \t]*//;s/[ \t]*$//'`
+                cID=`   echo $cstr | cut -d= -f1 | sed -e 's/^[ \t]*//;s/[ \t]*$//'`
+                cvalue=`echo $cstr | cut -d= -f2 | sed "s/\"//g" | sed -e 's/^[ \t]*//;s/[ \t]*$//'`
 
                 case $cID in
                     request_cpus)   reqcpu=$cvalue
