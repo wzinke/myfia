@@ -138,7 +138,8 @@ do
 
         while read zeile
         do
-            cstr=`echo $zeile | sed -e 's/^[ \t]*//;s/[ \t]*$//'`
+#             cstr=`echo $zeile | sed -e 's/^[ \t]*//;s/[ \t]*$//'`
+            cstr=$zeile
 
             if [ "$cstr" == "Queue" ]  # execute command and check number of running processes
             then
@@ -165,9 +166,10 @@ do
                         fi
                     done
                 done
+
             else # check for relevant keywords
-                cID=`   echo $cstr | cut -d= -f1 | sed -e 's/^[ \t]*//;s/[ \t]*$//'`
-                cvalue=`echo $cstr | cut -d= -f2 | sed "s/\"//g" | sed -e 's/^[ \t]*//;s/[ \t]*$//'`
+                cID=$(   echo $cstr | cut -d= -f1)   # | sed -e 's/^[ \t]*//;s/[ \t]*$//'`
+                cvalue=$(echo $cstr | cut -d= -f2 | sed -e 's/\"//g')   # | sed -e 's/^[ \t]*//;s/[ \t]*$//'`
 
                 case $cID in
                     request_cpus)   reqcpu=$cvalue
@@ -181,7 +183,7 @@ do
                                     ;;
                     initialdir)     cdir=$cvalue
                                     ;;
-            esac
+                esac
             fi
         done < $csub
 

@@ -379,7 +379,7 @@ immv ${tmpdir}/TS_itr${i}_mean_tmp ${tmpdir}/TS_itr${i}_mean
 
 if [ $do_bet -eq 1 ]
 then
-    betstr="-refweight $refmask -inweight ${curr_vol}_bet_mask "
+    betstr="-refweight $refmask -inweight ${tmpdir}/TS_itr${i}_mean_bet_mask"
 else
     betstr=""
 fi
@@ -390,24 +390,27 @@ then
     echo "final co-registration to reference."
     mkdir ${tmpdir}/final
 
-    flirt -in ${tmpdir}/TS_itr${i}_mean -ref $reffl  -coarsesearch 18 -finesearch 6 -omat ${tmpdir}/final/final_1.mat $searchtol -dof $dof $betstr
+    flirt -in ${tmpdir}/TS_itr${i}_mean -ref $reffl  -coarsesearch 18 -finesearch 6 -omat ${tmpdir}/final/final_2.mat  $searchtol -dof $dof $betstr -o ${tmpdir}/final_mean
 
-    flirt -in ${tmpdir}/TS_itr${i}_mean -ref $reffl  -coarsesearch 18 -finesearch 6 -omat ${tmpdir}/final/final_2.mat $searchtol -dof $dof $betstr  -init ${tmpdir}/final/final_1.mat -o ${tmpdir}/final_mean
+    # flirt -in ${tmpdir}/TS_itr${i}_mean -ref $reffl  -coarsesearch 18 -finesearch 6 -omat ${tmpdir}/final/final_1.mat $searchtol -dof $dof $betstr
+    # flirt -in ${tmpdir}/TS_itr${i}_mean -ref $reffl  -coarsesearch 18 -finesearch 6 -omat ${tmpdir}/final/final_2.mat $searchtol -dof $dof $betstr  -init ${tmpdir}/final/final_1.mat -o ${tmpdir}/final_mean
 
     condor_subhd $(which flirt)    > ${tmpdir}/final/coreg.submit
     condor_subhd $(which fslmaths) > ${tmpdir}/final/binnorm.submit
 
-    cnt=0
     mulstr=""
     sqrstr=""
     sumstr=""
     maskstr=""
 
-    for curr_mat in $mc_lst
+    cnt=0
+    vcnt=0
+    for curr_mat in $matlst
     do
-        convert_xfm -omat ${tmpdir}/final/vol_${cnt}.mat -concat $curr_mat ${tmpdir}/final/final_2.mat
+        vcnt=$((cnt+1))
+        convert_xfm -omat ${tmpdir}/final/vol_${vcnt}.mat -concat $curr_mat ${tmpdir}/final/final_2.mat
 
-        echo "arguments = \"-in $tmpdir/$cvol -ref $reffl -o ${tmpdir}/final/volr_${cnt} -init ${tmpdir}/final/vol_${cnt}.mat $flirt_fun_par -applyxfm\"" >> ${tmpdir}/final/coreg.submit
+        echo "arguments = \"-in ${tmpdir}/cvol_itr${i}/cvol_${cnt} -ref $reffl -o ${tmpdir}/final/volr_${cnt} -init ${tmpdir}/final/vol_${vcnt}.mat $flirt_fun_par -applyxfm\"" >> ${tmpdir}/final/coreg.submit
         echo "error  = ${tmpdir}/final/cvol_${cnt}_\$(Process).e" >> ${tmpdir}/final/coreg.submit
         echo "output = ${tmpdir}/final/cvol_${cnt}_\$(Process).o" >> ${tmpdir}/final/coreg.submit
         echo "Queue" >> ${tmpdir}/final/coreg.submit
@@ -443,7 +446,7 @@ then
 
     condor_waitend "${tmpdir}/final/coreg.submit ${tmpdir}/final/binnorm.submit" $loc_flag
 
-    fslmaths  $sumstr -div $cnt ${tmpdir}/TS_itr${i}_vxlcnt
+    fslmaths  $sumstr -div $cnt ${outnm}_vxlcnt
     fslmaths  $sumstr -div ${outnm}_vxlcnt -inm 1000 ${outnm}_mean
     fslmaths  $mulstr -inm 1000  ${outnm}_mul
     fslmaths  $sqrstr -inm 1000  ${outnm}_sqrt
@@ -463,6 +466,7 @@ then
     roivol=$(fslstats $last_head -w)
     fslroi $outnm $outnm $roivol
 fi
+
 
 #__________________________________________________________________________________________#
 if [ $keep_tmp -eq 0 ]
