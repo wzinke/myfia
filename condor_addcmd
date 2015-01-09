@@ -70,18 +70,26 @@ done
 
 if [ $do_shim -eq 0 ]
 then
-    echo "arguments = \"$argstr \""  $ostr
+    evalstr="echo arguments = \\\"$argstr \\\"  $ostr"
+    eval $evalstr
+
     if [ $keeplog -eq 1 ]
     then
-        echo "error  = ${lognm}_\$(Process).e"   $ostr
-        echo "output = ${lognm}_\$(Process).o"   $ostr
+        evalstr="echo error  = ${lognm}_\$(Process).e  $ostr"
+        eval $evalstr
+        evalstr="echo output = ${lognm}_\$(Process).o  $ostr"
+        eval $evalstr
     fi
-    echo "Queue" $ostr
-    echo ""      $ostr
-else
-    echo "arguments = \"\$(dmtcp_args) $argstr\"" $ostr
-    echo "environment = \$(dmtcp_env)" $ostr
 
-    echo "Queue" $ostr
-    echo "" $ostr
+    evalstr="echo -e \"Queue \\n\" $ostr"
+    eval $evalstr
+else
+    evalstr="echo arguments = \\\"\\\$(dmtcp_args) $argstr\\\" $ostr"
+    eval $evalstr
+
+    evalstr="echo environment = \\\$(dmtcp_env) $ostr"
+    eval $evalstr
+
+    evalstr="echo -e \"Queue \\n\" $ostr"
+    eval $evalstr
 fi

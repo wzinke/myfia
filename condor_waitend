@@ -92,10 +92,16 @@ do
 done
 
 SECONDS=0
+TotSec=0
 
+cnt=0
 for csub in $sbmfl
 do
     echo ">> Processing: $csub"
+
+    SECONDS=0
+    cnt=$(($cnt+1))
+
     if [ $runloc -eq 0 ]
     then
             jid=$(condor_submit $csub)
@@ -132,14 +138,12 @@ do
         cdir=$initdir
         jobstr=""
         jobcnt=0
-        waitend=0
+        waitend=1
 
         nunjobs=`cat $csub | grep Queue | wc -l`
 
-        while read zeile
+        while read cstr
         do
-#             cstr=`echo $zeile | sed -e 's/^[ \t]*//;s/[ \t]*$//'`
-            cstr=$zeile
 
             if [ "$cstr" == "Queue" ]  # execute command and check number of running processes
             then
@@ -168,8 +172,15 @@ do
                 done
 
             else # check for relevant keywords
-                cID=$(   echo $cstr | cut -d= -f1)   # | sed -e 's/^[ \t]*//;s/[ \t]*$//'`
-                cvalue=$(echo $cstr | cut -d= -f2 | sed -e 's/\"//g')   # | sed -e 's/^[ \t]*//;s/[ \t]*$//'`
+
+                if [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]
+                then
+                    cID=$(   echo $cstr | cut -d= -f1   | sed -e 's/^[ \t]*//;s/[ \t]*$//')
+                    cvalue=$(echo $cstr | cut -d= -f2- | sed -e 's/\"//g'   | sed -e 's/^[ \t]*//;s/[ \t]*$//')
+                else   # [ "$(uname)" == "Darwin" ]  # seems like sed has different behaviour depending on OS
+                    cID=$(   echo $cstr | cut -d= -f1)
+                    cvalue=$(echo $cstr | cut -d= -f2-)
+                fi
 
                 case $cID in
                     request_cpus)   reqcpu=$cvalue
@@ -204,12 +215,21 @@ do
         cd $initdir
     fi
     echo "done"
+
+    if [ $waitend -eq 1 ]
+    then
+        usedtime=`printf ""%dh:%dm:%ds"\n" $(($SECONDS/3600)) $(($SECONDS%3600/60)) $(($SECONDS%60))`
+        echo "... that took about $usedtime to complete $sbmfl (p/m $itv s)"
+        echo " "
+    fi
+
+    TotSec=$(($TotSec+$SECONDS))
 done
 
-if [ $waitend -eq 1 ]
+if [ $cnt -gt 1 -a $waitend -eq 1  ]
 then
-    usedtime=`printf ""%dh:%dm:%ds"\n" $(($SECONDS/3600)) $(($SECONDS%3600/60)) $(($SECONDS%60))`
-    echo "... that took about $usedtime to complete $sbmfl (p/m $itv s)"
+    usedtime=`printf ""%dh:%dm:%ds"\n" $(($TotSec/3600)) $(($TotSec%3600/60)) $(($TotSec%60))`
+    echo "... total processing time of $cnt submit fileswas about $usedtime (p/m $itv s)"
     echo " "
 fi
 
