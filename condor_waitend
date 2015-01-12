@@ -194,8 +194,6 @@ do
                                      ;;
                     "initialdir")    cdir="$cvalue"
                                      ;;
-                               *)    echo "Unknown identifier -- $cID"
-                                     ;;
                 esac
             fi
         done < $csub
