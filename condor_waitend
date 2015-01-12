@@ -171,15 +171,15 @@ do
                 done
 
             else # check for relevant keywords
-                if [ "$(uname)" == "Darwin" ]  # seems like sed has different behaviour depending on OS
-                then
-                    cID=$(   echo $cstr | cut -d= -f1 | awk '{gsub(/^ +| +$/,"")} {print $0}')
+#                if [ "$(uname)" == "Darwin" ]  # seems like sed has different behaviour depending on OS
+#                then
+                    cID=$(   echo $cstr | cut -d= -f1  | awk '{gsub(/^ +| +$/,"")} {print $0}')
                     cvalue=$(echo $cstr | cut -d= -f2- | sed -e 's/\"//g' | awk '{gsub(/^ +| +$/,"")} {print $0}')
-                elif [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]
-                then
-                    cID=$(   echo $cstr | cut -d= -f1   | sed -e 's/^[ \t]*//;s/[ \t]*$//')
-                    cvalue=$(echo $cstr | cut -d= -f2- | sed -e 's/\"//g'   | sed -e 's/^[ \t]*//;s/[ \t]*$//')
-                fi
+#                elif [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]
+#                then
+#                    cID=$(   echo $cstr | cut -d= -f1   | sed -e 's/^[ \t]*//;s/[ \t]*$//')
+#                    cvalue=$(echo $cstr | cut -d= -f2- | sed -e 's/\"//g'   | sed -e 's/^[ \t]*//;s/[ \t]*$//')
+#                fi
 
 
                 case "$cID" in
