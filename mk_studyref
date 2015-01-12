@@ -446,16 +446,16 @@ then
 
     condor_waitend "${tmpdir}/final/coreg.submit ${tmpdir}/final/binnorm.submit" $loc_flag
 
-    fslmaths  $sumstr -div $cnt ${outnm}_vxlcnt
-    fslmaths  $sumstr -div ${outnm}_vxlcnt -inm 1000 ${outnm}_mean
-    fslmaths  $mulstr -inm 1000  ${outnm}_mul
-    fslmaths  $sqrstr -inm 1000  ${outnm}_sqrt
+    fslmaths  $maskstr $cnt ${outnm}_vxlcnt
+    fslmaths  $sumstr  -div ${outnm}_vxlcnt -inm 1000 ${outnm}_mean
+    fslmaths  $mulstr  -inm 1000  ${outnm}_mul
+    fslmaths  $sqrstr  -inm 1000  ${outnm}_sqrt
 
     last_head=${tmpdir}/final/meanimg
 else
-    imcp ${tmpdir}/TS_itr${i}_mean ${outnm}_mean
-    fslmaths  $mulstr -inm 1000  ${tmpdir}/TS_itr${i}_mul
-    fslmaths  $sqrstr -inm 1000  ${tmpdir}/TS_itr${i}_sqrt
+    fslmaths  $mulstr -inm 1000      ${outnm}__mul
+    fslmaths  $sqrstr -inm 1000      ${outnm}__sqrt
+    imcp ${tmpdir}/TS_itr${i}_mean   ${outnm}_mean
     imcp ${tmpdir}/TS_itr${i}_vxlcnt ${outnm}_vxlcnt
     last_head=${tmpdir}/TS_itr${i}_mean
 fi
