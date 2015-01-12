@@ -107,7 +107,7 @@ do
             jid=$(condor_submit $csub)
             echo "$jid"
 
-            prid=`echo "$jid" | cut -d. -f1 | cut -d' ' -f6`
+            prid=$(echo "$jid" | cut -d. -f1 | cut -d' ' -f6)
 
         if [ $waitend -eq 1 ]
         then
@@ -134,13 +134,13 @@ do
             done
         fi
     else   # run local
-        initdir=`pwd`
+        initdir=$(pwd)
         cdir=$initdir
         jobstr=""
         jobcnt=0
         waitend=1
 
-        nunjobs=`cat $csub | grep Queue | wc -l`
+        numjobs=$(cat $csub | grep Queue | wc -l)
 
         while read cstr
         do
@@ -153,9 +153,9 @@ do
                 jobcnt=$(($jobcnt+1))
                 jobstr="$jobstr $pid"
 
-                echo -n "$jobcnt/$nunjobs ... "
+                echo -n "$jobcnt/$numjobs ... "
 
-                while [ `echo "$jobstr" | wc -w` -ge $nprocs ]
+                while [ $(echo "$jobstr" | wc -w) -ge $nprocs ]
                 do
                     sleep $itv
 
@@ -171,33 +171,34 @@ do
                 done
 
             else # check for relevant keywords
+#                if [ "$(uname)" == "Darwin" ]  # seems like sed has different behaviour depending on OS
+#                then
+                    cID=$(   echo $cstr | cut -d= -f1  | awk '{gsub(/^ +| +$/,"")} {print $0}')
+                    cvalue=$(echo $cstr | cut -d= -f2- | sed -e 's/\"//g' | awk '{gsub(/^ +| +$/,"")} {print $0}')
+#                elif [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]
+#                then
+#                    cID=$(   echo $cstr | cut -d= -f1   | sed -e 's/^[ \t]*//;s/[ \t]*$//')
+#                    cvalue=$(echo $cstr | cut -d= -f2- | sed -e 's/\"//g'   | sed -e 's/^[ \t]*//;s/[ \t]*$//')
+#                fi
 
-                if [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]
-                then
-                    cID=$(   echo $cstr | cut -d= -f1   | sed -e 's/^[ \t]*//;s/[ \t]*$//')
-                    cvalue=$(echo $cstr | cut -d= -f2- | sed -e 's/\"//g'   | sed -e 's/^[ \t]*//;s/[ \t]*$//')
-                else   # [ "$(uname)" == "Darwin" ]  # seems like sed has different behaviour depending on OS
-                    cID=$(   echo $cstr | cut -d= -f1)
-                    cvalue=$(echo $cstr | cut -d= -f2-)
-                fi
 
-                case $cID in
-                    request_cpus)   reqcpu=$cvalue
-                                    nprocs=`echo "($nprocs / $reqcpu) + 0.5" | bc -l | xargs printf "%1.0f"`
-                                    echo "Using $nprocs threads."
-                                    ;;
-                    Executable)     ccmd=$cvalue
-                                    echo "executing command $ccmd"
-                                    ;;
-                    arguments)      carg=$cvalue
-                                    ;;
-                    initialdir)     cdir=$cvalue
-                                    ;;
+                case "$cID" in
+                    "request_cpus")  reqcpu="$cvalue"
+                                     nprocs=$(echo "($nprocs / $reqcpu) + 0.5" | bc -l | xargs printf "%1.0f")
+                                     echo "Using $nprocs threads."
+                                     ;;
+                    "Executable")    ccmd="$cvalue"
+                                     echo "executing command $ccmd"
+                                     ;;
+                    "arguments")     carg="$cvalue"
+                                     ;;
+                    "initialdir")    cdir="$cvalue"
+                                     ;;
                 esac
             fi
         done < $csub
 
-        while [ `echo $jobstr | wc -w` -gt 0 ]
+        while [ $(echo $jobstr | wc -w) -gt 0 ]
         do
             sleep $itv
 
@@ -217,7 +218,7 @@ do
 
     if [ $waitend -eq 1 ]
     then
-        usedtime=`printf ""%dh:%dm:%ds"\n" $(($SECONDS/3600)) $(($SECONDS%3600/60)) $(($SECONDS%60))`
+        usedtime=$(printf ""%dh:%dm:%ds"\n" $(($SECONDS/3600)) $(($SECONDS%3600/60)) $(($SECONDS%60)))
         echo "... that took about $usedtime to complete $sbmfl (p/m $itv s)"
         echo " "
     fi
@@ -227,7 +228,7 @@ done
 
 if [ $cnt -gt 1 -a $waitend -eq 1  ]
 then
-    usedtime=`printf ""%dh:%dm:%ds"\n" $(($TotSec/3600)) $(($TotSec%3600/60)) $(($TotSec%60))`
+    usedtime=$(printf ""%dh:%dm:%ds"\n" $(($TotSec/3600)) $(($TotSec%3600/60)) $(($TotSec%60)))
     echo "... total processing time of $cnt submit fileswas about $usedtime (p/m $itv s)"
     echo " "
 fi
