@@ -62,7 +62,7 @@ do
          -go)   waitend=0
                 shift
                 ;;
-      -nproc)   nproc=$2
+      -nproc)   nprocs=$2
                 runloc=1
                 shift 2
                 ;;
@@ -144,7 +144,6 @@ do
 
         while read cstr
         do
-
             if [ "$cstr" == "Queue" ]  # execute command and check number of running processes
             then
                 cd $cdir
@@ -156,7 +155,7 @@ do
 
                 echo -n "$jobcnt/$nunjobs ... "
 
-                while [ `echo "$jobstr" | wc -w` -gt $nprocs ]
+                while [ `echo "$jobstr" | wc -w` -ge $nprocs ]
                 do
                     sleep $itv
 
