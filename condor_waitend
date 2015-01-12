@@ -107,7 +107,7 @@ do
             jid=$(condor_submit $csub)
             echo "$jid"
 
-            prid=`echo "$jid" | cut -d. -f1 | cut -d' ' -f6`
+            prid=$(echo "$jid" | cut -d. -f1 | cut -d' ' -f6)
 
         if [ $waitend -eq 1 ]
         then
@@ -134,13 +134,13 @@ do
             done
         fi
     else   # run local
-        initdir=`pwd`
+        initdir=$(pwd)
         cdir=$initdir
         jobstr=""
         jobcnt=0
         waitend=1
 
-        nunjobs=`cat $csub | grep Queue | wc -l`
+        numjobs=$(cat $csub | grep Queue | wc -l)
 
         while read cstr
         do
@@ -153,9 +153,9 @@ do
                 jobcnt=$(($jobcnt+1))
                 jobstr="$jobstr $pid"
 
-                echo -n "$jobcnt/$nunjobs ... "
+                echo -n "$jobcnt/$numjobs ... "
 
-                while [ `echo "$jobstr" | wc -w` -ge $nprocs ]
+                while [ $(echo "$jobstr" | wc -w) -ge $nprocs ]
                 do
                     sleep $itv
 
@@ -172,18 +172,19 @@ do
 
             else # check for relevant keywords
 
-                if [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]
+                if [ "$(uname)" == "Darwin" ]  # seems like sed has different behaviour depending on OS
+                then
+                    cID=$(   echo $cstr | cut -d= -f1)
+                    cvalue=$(echo $cstr | cut -d= -f2-)
+                elif [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]
                 then
                     cID=$(   echo $cstr | cut -d= -f1   | sed -e 's/^[ \t]*//;s/[ \t]*$//')
                     cvalue=$(echo $cstr | cut -d= -f2- | sed -e 's/\"//g'   | sed -e 's/^[ \t]*//;s/[ \t]*$//')
-                else   # [ "$(uname)" == "Darwin" ]  # seems like sed has different behaviour depending on OS
-                    cID=$(   echo $cstr | cut -d= -f1)
-                    cvalue=$(echo $cstr | cut -d= -f2-)
                 fi
 
                 case $cID in
                     request_cpus)   reqcpu=$cvalue
-                                    nprocs=`echo "($nprocs / $reqcpu) + 0.5" | bc -l | xargs printf "%1.0f"`
+                                    nprocs=$(echo "($nprocs / $reqcpu) + 0.5" | bc -l | xargs printf "%1.0f")
                                     echo "Using $nprocs threads."
                                     ;;
                     Executable)     ccmd=$cvalue
