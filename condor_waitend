@@ -33,14 +33,6 @@ if [ $# -lt 1 ]; then
     Usage
 else
     sbmfl=$1
-#     if [ $(echo $OSTYPE | grep linux | wc -w) -eq 0 ]
-#     then
-#         tmpfl=$(tmpnam /tmp/MacSubmit)
-# #         iconv --from-code=UTF-8 --to-code=MAC $sbmfl
-#         awk '{ gsub("\r", "\n"); print $0;}' $sbmfl > $sbmfl
-# #       tr '\n' '\r' < $sbmfl > $tmpfl
-#     fi
-
     shift
 fi
 

@@ -65,7 +65,7 @@ outnm=$(remove_ext ${fllst})_avrg
 mask_thr=15
 get_refmask=1
 dof=12
-ref=0
+ref="NA"
 rot_tol=6
 ip="spline"
 costfun="normcorr"
@@ -192,6 +192,8 @@ fi
 
 for curr_vol in $vol_lst
 do
+    echo "... Preparing ${curr_vol}"
+
     echo "arguments = \"${curr_vol} $smstr -nan $thrstr $tmpdir/vols/vol_${cnt}\"" >> $tmpdir/vols/fslm.submit
     echo "error  = $tmpdir/vols/cvol_${cnt}_fslm_\$(Process).e" >> $tmpdir/vols/fslm.submit
     echo "output = $tmpdir/vols/cvol_${cnt}_fslm_\$(Process).o" >> $tmpdir/vols/fslm.submit
@@ -218,6 +220,33 @@ do
             refmask="$tmpdir/vols/vol_${cnt}_bet_mask"
             get_refmask=0
         fi
+    elif [ "$ref" == "NA" ]
+    then
+        cvxlX=$(fslval ${curr_vol} pixdim1)
+        cvxlY=$(fslval ${curr_vol} pixdim2)
+        cvxlZ=$(fslval ${curr_vol} pixdim3)
+
+        cvxlvol=$(echo "$cvxlX * $cvxlY * $cvxlZ" | bc -l)
+
+        if [ $cnt -eq 0 ]
+        then
+            ref="$tmpdir/vols/vol_${cnt}"
+            refvxlvol="$cvxlvol"
+            if [ $do_bet -eq 1 ]
+            then
+                refmask="$tmpdir/vols/vol_${cnt}_bet_mask"
+                get_refmask=0
+            fi
+        elif [ $cvxlvol -lt $refvxlvol ]
+        then
+            ref="$tmpdir/vols/vol_${cnt}"
+            refvxlvol="$cvxlvol"
+            if [ $do_bet -eq 1 ]
+            then
+                refmask="$tmpdir/vols/vol_${cnt}_bet_mask"
+                get_refmask=0
+            fi
+        fi
     fi
 
     cnt=$(($cnt+1))
@@ -234,6 +263,8 @@ fi
 # get the reference image
 reffl=${tmpdir}/ref
 refweight=${tmpdir}/refmask
+
+echo "Reference image: $ref"
 
 imcp $ref $reffl   # copy reference into temp directory
 
@@ -446,15 +477,15 @@ then
 
     condor_waitend "${tmpdir}/final/coreg.submit ${tmpdir}/final/binnorm.submit" $loc_flag
 
-    fslmaths  $maskstr $cnt ${outnm}_vxlcnt
+    fslmaths  $maskstr      ${outnm}_vxlcnt
     fslmaths  $sumstr  -div ${outnm}_vxlcnt -inm 1000 ${outnm}_mean
     fslmaths  $mulstr  -inm 1000  ${outnm}_mul
-    fslmaths  $sqrstr  -inm 1000  ${outnm}_sqrt
+    fslmaths  $sqrstr  -inm 1000  ${outnm}_sqr
 
     last_head=${tmpdir}/final/meanimg
 else
-    fslmaths  $mulstr -inm 1000      ${outnm}__mul
-    fslmaths  $sqrstr -inm 1000      ${outnm}__sqrt
+    fslmaths  $mulstr -inm 1000      ${outnm}_mul
+    fslmaths  $sqrstr -inm 1000      ${outnm}_sqr
     imcp ${tmpdir}/TS_itr${i}_mean   ${outnm}_mean
     imcp ${tmpdir}/TS_itr${i}_vxlcnt ${outnm}_vxlcnt
     last_head=${tmpdir}/TS_itr${i}_mean

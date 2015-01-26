@@ -1,0 +1,114 @@
+#!/bin/bash
+#
+# mk_refgrid
+#
+# created: 25.01.2015
+# by zinke
+#
+
+Usage() {
+cat << EOF
+
+    Usage: $0 <refimg> <ofl> <X1> <dX> <Y1> <dY> <Z1> <dZ> [options]
+
+        Create a simple reference grid defined by 12 edge lines.
+
+    OPTIONS:
+            -wd     width of grid bars [default: 4 voxel]
+            -keep   don't delete temporary files when finished
+
+            ###########################################################
+            ##   (c) wolf zinke (2015) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+
+EOF
+exit 1
+
+}
+
+
+if [ $# -lt 8 ]; then
+    Usage
+else
+    refimg=$1
+    ofl=$2
+    X1=$3
+    dX=$4
+    Y1=$5
+    dY=$6
+    Z1=$7
+    dZ=$8
+    shift 8
+fi
+
+#__________________________________________________________________________________________#
+
+gridwd=4
+keep_tmp=0
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+         -wd)   gridwd=$2
+                shift 2
+                ;;
+       -keep)   keep_tmp=1
+                shift
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+#__________________________________________________________________________________________#
+
+tmpdir=`tmpnam tmp_Grid`
+rm $tmpdir
+mkdir $tmpdir
+
+#__________________________________________________________________________________________#
+fslmaths $refimg -mul 0 -add 1 $tmpdir/alones
+
+Xsz=$(fslval $tmpdir/alones dim1)
+Ysz=$(fslval $tmpdir/alones dim2)
+Zsz=$(fslval $tmpdir/alones dim3)
+
+#__________________________________________________________________________________________#
+
+# xbars
+fslmaths $tmpdir/alones -roi 0 $Xsz $Y1                  $gridwd $Z1                  $gridwd 0 1 $tmpdir/bar1
+fslmaths $tmpdir/alones -roi 0 $Xsz $(($Y1+$dY-$gridwd)) $gridwd $Z1                  $gridwd 0 1 $tmpdir/bar2
+fslmaths $tmpdir/alones -roi 0 $Xsz $(($Y1+$dY-$gridwd)) $gridwd $(($Z1+$dZ-$gridwd)) $gridwd 0 1 $tmpdir/bar3
+fslmaths $tmpdir/alones -roi 0 $Xsz $Y1                  $gridwd $(($Z1+$dZ-$gridwd)) $gridwd 0 1 $tmpdir/bar4
+
+# ybars
+fslmaths $tmpdir/alones -roi $X1                  $gridwd 0 $Ysz $Z1                  $gridwd 0 1 $tmpdir/bar5
+fslmaths $tmpdir/alones -roi $(($X1+$dX-$gridwd)) $gridwd 0 $Ysz $Z1                  $gridwd 0 1 $tmpdir/bar6
+fslmaths $tmpdir/alones -roi $(($X1+$dX-$gridwd)) $gridwd 0 $Ysz $(($Z1+$dZ-$gridwd)) $gridwd 0 1 $tmpdir/bar7
+fslmaths $tmpdir/alones -roi $X1                  $gridwd 0 $Ysz $(($Z1+$dZ-$gridwd)) $gridwd 0 1 $tmpdir/bar8
+
+# zbars
+fslmaths $tmpdir/alones -roi $X1                  $gridwd $Y1                  $gridwd 0 $Zsz 0 1 $tmpdir/bar9
+fslmaths $tmpdir/alones -roi $(($X1+$dX-$gridwd)) $gridwd $Y1                  $gridwd 0 $Zsz 0 1 $tmpdir/bar10
+fslmaths $tmpdir/alones -roi $(($X1+$dX-$gridwd)) $gridwd $(($Y1+$dY-$gridwd)) $gridwd 0 $Zsz 0 1 $tmpdir/bar11
+fslmaths $tmpdir/alones -roi $X1                  $gridwd $(($Y1+$dY-$gridwd)) $gridwd 0 $Zsz 0 1 $tmpdir/bar12
+
+# sum all up
+fslmaths      $tmpdir/bar1 -add $tmpdir/bar2  -add $tmpdir/bar3  -add $tmpdir/bar4 \
+         -add $tmpdir/bar5 -add $tmpdir/bar6  -add $tmpdir/bar7  -add $tmpdir/bar8 \
+         -add $tmpdir/bar9 -add $tmpdir/bar10 -add $tmpdir/bar11 -add $tmpdir/bar12  $ofl
+
+#__________________________________________________________________________________________#
+
+#__________________________________________________________________________________________#
+if [ $keep_tmp -eq 0 ]
+then
+    rm -r $tmpdir
+fi
