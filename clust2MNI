@@ -267,7 +267,7 @@ do
 done < $tmpdir/clustloc.dat
 
 # create output
-if [ "X$ncol" == "X" ]
+if [ "X$ncol" != "X" ]
 then
     if [ $ncol -eq 9 ]
     then
