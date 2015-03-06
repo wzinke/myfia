@@ -59,8 +59,7 @@ do
           -o)   ofl=$2
                 shift 2
                 ;;
-          -m)   maskstr="-mas $2"
-                maskfl=$2
+          -m)   maskfl=$2
                 get_mask=0
                 shift 2
                 ;;
@@ -84,10 +83,10 @@ mkdir $tmpdir
 if [ "X$maskstr" == "X" ]
 then
     fslmaths $zstat1 -add $zstat2 -add $zstat3 -abs -bin $tmpdir/mask -odt char
-    maskstr="-mas $tmpdir/mask"
+    maskfl="$tmpdir/mask"
 fi
 
-fslmaths $zstat1 -min $zstat2 -min $zstat3 $maskstr $ofl
+fslmaths $zstat1 -min $zstat2 -min $zstat3 -mas $maskfl $ofl
 
 # estimate image smoothness
 SM1=`smoothest -z $zstat1 -m $maskfl`
