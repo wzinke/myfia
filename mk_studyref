@@ -461,13 +461,13 @@ then
 
         if [ $cnt -eq 0 ]
         then
-            mulstr=" ${tmpdir}/final/vol_${cnt}"
-            sqrstr=" ${tmpdir}/final/vol_${cnt}"
+#             mulstr=" ${tmpdir}/final/vol_${cnt}"
+#             sqrstr=" ${tmpdir}/final/vol_${cnt}"
             sumstr=" ${tmpdir}/final/vol_${cnt}"
             maskstr="${tmpdir}/final/vol_${cnt}_mask"
         else
-            mulstr="  $mulstr -mul ${tmpdir}/final/vol_${cnt}"
-            sqrstr="  $sqrstr -mul ${tmpdir}/final/vol_${cnt} -sqrt"
+#             mulstr="  $mulstr -mul ${tmpdir}/final/vol_${cnt}"
+#             sqrstr="  $sqrstr -mul ${tmpdir}/final/vol_${cnt} -sqrt"
             sumstr="  $sumstr -add ${tmpdir}/final/vol_${cnt}"
             maskstr="$maskstr -add ${tmpdir}/final/vol_${cnt}_mask"
         fi
@@ -479,13 +479,13 @@ then
 
     fslmaths  $maskstr      ${outnm}_vxlcnt
     fslmaths  $sumstr  -div ${outnm}_vxlcnt -inm 1000 ${outnm}_mean
-    fslmaths  $mulstr  -inm 1000  ${outnm}_mul
-    fslmaths  $sqrstr  -inm 1000  ${outnm}_sqr
+#     fslmaths  $mulstr  -inm 1000  ${outnm}_mul
+#     fslmaths  $sqrstr  -inm 1000  ${outnm}_sqr
 
     last_head=${tmpdir}/final/meanimg
 else
-    fslmaths  $mulstr -inm 1000      ${outnm}_mul
-    fslmaths  $sqrstr -inm 1000      ${outnm}_sqr
+#     fslmaths  $mulstr -inm 1000      ${outnm}_mul
+#     fslmaths  $sqrstr -inm 1000      ${outnm}_sqr
     imcp ${tmpdir}/TS_itr${i}_mean   ${outnm}_mean
     imcp ${tmpdir}/TS_itr${i}_vxlcnt ${outnm}_vxlcnt
     last_head=${tmpdir}/TS_itr${i}_mean

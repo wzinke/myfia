@@ -195,6 +195,11 @@ while read zeile
 do
     ncol=$(echo "$zeile" | wc -w)
 
+    if [ "X$ncol" == "X" ]
+    then
+        continue
+    fi
+
     if [ $ncol -eq 9 ]
     then
         cID=$( echo $zeile | cut -d' ' -f1)
@@ -262,14 +267,17 @@ do
 done < $tmpdir/clustloc.dat
 
 # create output
-if [ $ncol -eq 9 ]
+if [ "X$ncol" == "X" ]
 then
-    eval "printf \"%3s %5s %8s %6s %6s %6s %6s %6s %6s    %s\n\" ID voxel MaxVal max_X max_Y max_Z cog_X cog_Y cog_Z  $IDHDstr $ohdstr"
-else
-    eval "printf \"%3s %5s %8s %8s %8s %6s %6s %6s %6s %6s %6s    %s\n\" ID voxel MaxVal p_value log_p max_X max_Y max_Z cog_X cog_Y cog_Z  $IDHDstr $ohdstr"
-fi
+    if [ $ncol -eq 9 ]
+    then
+        eval "printf \"%3s %5s %8s %6s %6s %6s %6s %6s %6s    %s\n\" ID voxel MaxVal max_X max_Y max_Z cog_X cog_Y cog_Z  $IDHDstr $ohdstr"
+    else
+        eval "printf \"%3s %5s %8s %8s %8s %6s %6s %6s %6s %6s %6s    %s\n\" ID voxel MaxVal p_value log_p max_X max_Y max_Z cog_X cog_Y cog_Z  $IDHDstr $ohdstr"
+    fi
 
-eval "cat $tmpdir/mnitbl.dat $ostr"
+    eval "cat $tmpdir/mnitbl.dat $ostr"
+fi
 
 #__________________________________________________________________________________________#
 
