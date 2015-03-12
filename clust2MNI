@@ -23,6 +23,7 @@ cat << EOF
             -thr    use this threshold (default: minimum>0)
             -p      use cluster inference at this p-level
             -idmax  identify underlying brain structure for maximum voxel
+            -msz    minimum cluster size to be considered (default: 1 - to include all) NIY!
             -atlas  this atlas for identification (default: Harvard-Oxford)
             -keep   do not delete temporary files
 
@@ -43,6 +44,7 @@ exit 1
 # TODO: implement use of local maxima
 # TODO: implement non-linear transformations
 # TODO: allow more than one atlas
+# TODO: implement constraint of minimum cluster size
 
 if [ $# -lt 1 ]; then
     Usage
@@ -76,6 +78,7 @@ maskfl=""
 do_lm=0
 lmstr=""
 copestr=""
+msz=1
 
 while [ $# -gt 0 ] ;
 do
@@ -119,6 +122,9 @@ do
       -idmax)   do_id=1
                 do_max=1
                 shift
+                ;;
+        -msz)   msz=$2
+                shift 2
                 ;;
       -atlas)   do_id=1
                 atlas="$2"

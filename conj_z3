@@ -51,7 +51,6 @@ maskstr=""
 keep_temp=0
 ofl="$(remove_ext $zstat1)_CONJ_$(remove_ext $zstat2)_CONJ_$(remove_ext $zstat3)"
 do_global=0
-get_mask=1
 
 while [ $# -gt 0 ] ;
 do
@@ -60,7 +59,6 @@ do
                 shift 2
                 ;;
           -m)   maskfl=$2
-                get_mask=0
                 shift 2
                 ;;
        -keep)   keep_temp=1
@@ -83,8 +81,10 @@ mkdir $tmpdir
 if [ "X$maskstr" == "X" ]
 then
     fslmaths $zstat1 -add $zstat2 -add $zstat3 -abs -bin $tmpdir/mask -odt char
-    maskfl="$tmpdir/mask"
+else
+    fslmaths $maskfl -bin -bin $tmpdir/mask -odt char
 fi
+maskfl="$tmpdir/mask"
 
 fslmaths $zstat1 -min $zstat2 -min $zstat3 -mas $maskfl $ofl
 
