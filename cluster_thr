@@ -108,11 +108,11 @@ do
                 matstr="-mat $2"
                 shift 2
                 ;;
-       -mask)   maskfl=`remove_ext $2`
+       -mask)   maskfl=$(remove_ext $2)
                 get_mask=0
                 shift 2
                 ;;
-        -bck)   bckfl=`remove_ext $2`
+        -bck)   bckfl=$(remove_ext $2)
                 do_plot=1
                 shift 2
                 ;;
@@ -147,7 +147,7 @@ printf "%24s %-10s %-8s %-8s %-8s %-10s %-8s %-8s %-8s \n" File Num_vxl p z num_
 
 if [ $get_mask -eq 0 ]
 then
-    fslmaths $maskfl -abs -bin $tmpdir/mask.nii.gz
+    $FSLDIR/bin/fslmaths $maskfl -abs -bin $tmpdir/mask.nii.gz
 fi
 
 for cfl in $fllst
@@ -158,10 +158,10 @@ do
 
     if [ $get_mask -eq 1 ]
     then
-        fslmaths $cfl -abs -bin $tmpdir/mask.nii.gz
+        $FSLDIR/bin/fslmaths $cfl -abs -bin $tmpdir/mask.nii.gz
     fi
 
-    num_vxl=$(fslstats $tmpdir/mask.nii.gz -V | awk '{print $1}')
+    num_vxl=$($FSLDIR/bin/fslstats $tmpdir/mask.nii.gz -V | awk '{print $1}')
 
     fslmaths $cfl -mas $tmpdir/mask.nii.gz $tmpdir/thresh_zmap
 
@@ -170,19 +170,19 @@ do
     then
         SM=`cat $smnm`
     else
-        SM=`smoothest -z $cfl --mask=$tmpdir/mask.nii.gz`
+        SM=$($FSLDIR/bin/smoothest -z $cfl --mask=$tmpdir/mask.nii.gz)
     fi
 
-    DLH=`   echo $SM | awk '{print $2}'`
-    VOLUME=`echo $SM | awk '{print $4}'`
-    RESELS=`echo $SM | awk '{print $6}'`
+    DLH=$(   echo $SM | awk '{print $2}')
+    VOLUME=$(echo $SM | awk '{print $4}')
+    RESELS=$(echo $SM | awk '{print $6}')
 
     if [ $fullout -eq 1 ]
     then
         outstr=" --opvals=${onm}_pvals --olmax=${onm}_lmax.txt -o ${onm}_cluster_mask"
     fi
 
-    cluster -i $tmpdir/thresh_zmap -t $zthr -p $pthr -d $DLH --volume=$VOLUME --othresh=$onm --connectivity=$c --olmaxim=${onm}_lmax --mm  --minclustersize $matCLstr $outstr > ${onm}_cluster.txt
+    $FSLDIR/bin/cluster -i $tmpdir/thresh_zmap -t $zthr -p $pthr -d $DLH --volume=$VOLUME --othresh=$onm --connectivity=$c --olmaxim=${onm}_lmax --mm  --minclustersize $matCLstr $outstr > ${onm}_cluster.txt
 
 # cluster -i thresh_zstat12 -c stats/cope12 -t 2.3 -p 0.05 -d 0.0708704 --volume=206269 --othresh=thresh_zstat12 -o cluster_mask_zstat12 --connectivity=26 --mm --olmax=lmax_zstat12_std.txt --scalarname=Z > cluster_zstat12_std.txt
 
@@ -193,15 +193,15 @@ do
             outstr=" --opvals=${onm}_neg_pvals --olmax=${onm}_neg_lmax.txt -o $tmpdir/thresh_neg_cluster_mask"
         fi
 
-        fslmaths $tmpdir/thresh_zmap -mul -1 $tmpdir/inv_zmap
+        $FSLDIR/bin/fslmaths $tmpdir/thresh_zmap -mul -1 $tmpdir/inv_zmap
 
-        cluster -i $tmpdir/inv_zmap -t $zthr -p $pthr -d $DLH --volume=$VOLUME --othresh=$tmpdir/thresh_neg --connectivity=$c --olmaxim=${onm}_neg_lmax --mm $matCLstr $outstr > ${onm}_neg_cluster.txt
+        $FSLDIR/bin/cluster -i $tmpdir/inv_zmap -t $zthr -p $pthr -d $DLH --volume=$VOLUME --othresh=$tmpdir/thresh_neg --connectivity=$c --olmaxim=${onm}_neg_lmax --mm $matCLstr $outstr > ${onm}_neg_cluster.txt
 
-        fslmaths $tmpdir/thresh_neg -mul -1 -add $onm $onm
+        $FSLDIR/bin/fslmaths $tmpdir/thresh_neg -mul -1 -add $onm $onm
 
         if [ $fullout -eq 1 ]
         then
-            fslmaths $tmpdir/thresh_neg_cluster_mask -mul -1 -add ${onm}_cluster_mask ${onm}_cluster_mask
+            $FSLDIR/bin/fslmaths $tmpdir/thresh_neg_cluster_mask -mul -1 -add ${onm}_cluster_mask ${onm}_cluster_mask
         fi
     fi
 
@@ -209,13 +209,13 @@ do
 
     if [ $num_active -gt 0 ]
     then
-        minmax=`fslstats $cfl -k $onm -R`
-        minval=`echo $minmax | awk '{print $1}'`
-        maxval=`echo $minmax | awk '{print $2}'`
+        minmax=$($FSLDIR/bin/fslstats $cfl -k $onm -R)
+        minval=$(echo $minmax | awk '{print $1}')
+        maxval=$(echo $minmax | awk '{print $2}')
 
-        robminmax=`fslstats $cfl -k $onm -a -r`
-        robminval=`echo $robminmax | awk '{print $1}'`
-        robmaxval=`echo $robminmax | awk '{print $2}'`
+        robminmax=$(fslstats $cfl -k $onm -a -r)
+        robminval=$(echo $robminmax | awk '{print $1}')
+        robmaxval=`$(echo $robminmax | awk '{print $2}')
 
         if [ $do_plot -eq 1 ]
         then

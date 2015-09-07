@@ -86,7 +86,6 @@ done
 
 #__________________________________________________________________________________________#
 
-
 fslmeants -i $infl $mstr --showall --transpose -o $tmpdir/vxlval.dat
 
 cat $tmpdir/vxlval.dat | awk '{print $4}' > $tmpdir/vxlval_1d.dat

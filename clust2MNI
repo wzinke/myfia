@@ -154,13 +154,13 @@ if [ $(imtest $flnm) -eq 1 ]
 then
     if [ $do_mask -eq 1 ]
     then
-        fslmaths $flnm -mas $maskfl $tmpdir/flin
+        $FSLDIR/bin/fslmaths $flnm -mas $maskfl $tmpdir/flin
         flnm=$tmpdir/flin
         maskstr="-mask $maskfl"
     fi
 
-    flstem=`basename $flnm`
-    flstem=`remove_ext $flstem`
+    flstem=$(basename $flnm)
+    flstem=$($FSLDIR/bin/remove_ext $flstem)
 
     if [ $do_reg -eq 1 ]
     then
@@ -178,7 +178,7 @@ then
         cluster_thr -l "$flnm" -o $tmpdir -z $thr -p $pval $maskstr $mstr
         cltbl=$tmpdir/${flstem}_cluster.txt
     else
-        cluster -i $flnm  $copestr -t $thr --mm --minclustersize --olmax=$tmpdir/locmax.dat $mstr > $tmpdir/clusttbl.dat
+        $FSLDIR/bin/cluster -i $flnm  $copestr -t $thr --mm --minclustersize --olmax=$tmpdir/locmax.dat $mstr > $tmpdir/clusttbl.dat
         cltbl=$tmpdir/clusttbl.dat
     fi
 else
@@ -242,23 +242,23 @@ do
             echo "ERROR: Image file in native image space has to be provided with the -ori option!"
             exit 1
         fi
-        ncCOOR=$(echo "$cMX $cMY $cMZ" | img2stdcoord  -img $flnm -std $refvol $dimstr -)
-        cMX=$( echo $ncCOOR | cut -d' ' -f1)
-        cMY=$( echo $ncCOOR | cut -d' ' -f2)
-        cMZ=$( echo $ncCOOR | cut -d' ' -f3)
-        ncCOOR=$(echo "$cCX $cCY $cCZ" | img2stdcoord  -img $flnm -std $refvol $dimstr -)
-        cCX=$( echo $ncCOOR | cut -d' ' -f1)
-        cCY=$( echo $ncCOOR | cut -d' ' -f2)
-        cCZ=$( echo $ncCOOR | cut -d' ' -f3)
+        ncCOOR=$(echo "$cMX $cMY $cMZ" | $FSLDIR/bin/img2stdcoord  -img $flnm -std $refvol $dimstr -)
+        cMX=$(   echo $ncCOOR | cut -d' ' -f1)
+        cMY=$(   echo $ncCOOR | cut -d' ' -f2)
+        cMZ=$(   echo $ncCOOR | cut -d' ' -f3)
+        ncCOOR=$(echo "$cCX $cCY $cCZ" | $FSLDIR/bin/img2stdcoord  -img $flnm -std $refvol $dimstr -)
+        cCX=$(   echo $ncCOOR | cut -d' ' -f1)
+        cCY=$(   echo $ncCOOR | cut -d' ' -f2)
+        cCZ=$(   echo $ncCOOR | cut -d' ' -f3)
     fi
 
     if [ $do_id -eq 1 ]
     then
         if [ $do_max -eq 1 ]
         then
-            cNM=$(atlasquery -a "$atlas" -c $cMX,$cMY,$cMZ | cut -d'>' -f4)
+            cNM=$($FSLDIR/bin/atlasquery -a "$atlas" -c $cMX,$cMY,$cMZ | cut -d'>' -f4)
         else
-            cNM=$(atlasquery -a "$atlas" -c $cCX,$cCY,$cCZ | cut -d'>' -f4)
+            cNM=$($FSLDIR/bin/atlasquery -a "$atlas" -c $cCX,$cCY,$cCZ | cut -d'>' -f4)
         fi
 
         IDHDstr=$(echo "$atlas" | sed -e 's/ /_/g')
