@@ -8,7 +8,7 @@ cat << EOF
 
     OPTIONS:
             -x -y -z            specify set of slices to save as image (e.g. -z "2 4 6 8 10")
-                                numbers > 1 specify slicenumbers, numbers < 1 specify proportions.
+                                numbers > 1 specify slice numbers, numbers < 1 specify proportions.
             -cog, -max          determines location of Center of gravity or voxel with maximum value
                                 as voxel coordinate.
                                 This will override specifications for each voxel location.
@@ -21,7 +21,7 @@ cat << EOF
             -rsmpl              resample overlay image to match resolution of background image.
                                 this assumes that both images are in the same space.
             -trans              transparent colors
-            -pxl                number of pixels seperating two images (default:5)
+            -pxl                number of pixels separating two images (default:5)
             -thick              increase width of slice line
             -neg                render also the negative stat map
             -noside             do not show right side label
@@ -31,7 +31,7 @@ cat << EOF
             -bgint   <min max>  intensity range for the background image
             -statrng <min max>  color range for the overlay
             -statmin <min>      minimum threshold of the overlay color range
-            -out  <outname>     filename for output data
+            -out  <outname>     file name for output data
             -keep               do not delete temporary files (for debugging)
 
             ###########################################################
@@ -208,7 +208,7 @@ then
 fi
 
 #----------------------------------------------------------------------#
-# coregister overlay statistics to background image
+# co-register overlay statistics to background image
 if [ $(($ovly_stat+$do_flirt)) -eq 2 ]
 then
     if [ $(imtest $transmat) -eq 1 ]
@@ -233,7 +233,14 @@ Xsz=`fslval $bg_img dim1`
 Ysz=`fslval $bg_img dim2`
 Zsz=`fslval $bg_img dim3`
 
-bckfov=$(fslstats $bg_img -w)
+
+if [ $ovly_stat -eq 1 ]
+then
+    fslmaths $bg_img -add $statmap $tmpdir/sumimag
+    bckfov=$(fslstats $tmpdir/sumimag -w)
+else
+    bckfov=$(fslstats $bg_img -w)
+fi
 
 xmin=$(echo $bckfov | cut -d' ' -f1)
 xmax=$(echo $bckfov | cut -d' ' -f2)

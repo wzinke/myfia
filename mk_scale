@@ -1,0 +1,365 @@
+#!/bin/bash
+#
+# mk_scale
+#
+# created: 06.02.2016
+# by zinke
+#
+
+Usage() {
+cat << EOF
+
+    Usage: $0 <reffl> [options]
+
+    OPTIONS:
+            -o     file name for the scale grid
+            -c     coordinate of center/origin of the scale (default is edge)
+            -t     spacing of ticks (in voxel, default is 20 voxel)
+            -l     length of tick marks (in voxel, default is 4 voxel)
+            -w     line width (in voxel, default is 3 voxel)
+            -keep  don't delete temporary files when finished
+
+            ###########################################################
+            ##   (c) wolf zinke (2016) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+
+EOF
+exit 1
+
+}
+
+
+if [ $# -lt 1 ]; then
+    Usage
+else
+    refimg=$1;
+    shift
+fi
+
+#__________________________________________________________________________________________#
+keep_tmp=0
+ctrX=0
+ctrY=0
+ctrZ=0
+ofl=$(remove_ext $refimg)
+
+tickDist=20
+tickthick=3
+ticklen=4
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+       -keep)   keep_tmp=1
+                shift
+                ;;
+          -o)   ofl=$(remove_ext $2)
+                shift 2
+                ;;
+          -t)   tickDist=$2
+                shift 2
+                ;;
+          -l)   ticklen=$2
+                shift 2
+                ;;
+          -w)   tickthick=$2
+                shift 2
+                ;;
+          -c)   ctrX=$2
+                ctrY=$3
+                ctrZ=$4
+                shift 4
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+#__________________________________________________________________________________________#
+tmpdir=`tmpnam tmp_Scale`
+rm $tmpdir
+mkdir $tmpdir
+
+#__________________________________________________________________________________________#
+# create a cube of ones
+fslmaths $refimg -mul 0 -add 1 $tmpdir/allones -odt char
+
+Xsz=$(fslval $tmpdir/allones dim1)
+Ysz=$(fslval $tmpdir/allones dim2)
+Zsz=$(fslval $tmpdir/allones dim3)
+
+#__________________________________________________________________________________________#
+# get cardinal axes
+hfwd=$(($tickthick / 2))
+fslmaths $tmpdir/allones -roi $(($ctrX-$hfwd)) $tickthick 0 $Ysz 0 $Zsz 0 1 $tmpdir/X_plane -odt char
+fslmaths $tmpdir/allones -roi 0 $Xsz $(($ctrY-$hfwd)) $tickthick 0 $Zsz 0 1 $tmpdir/Y_plane -odt char
+fslmaths $tmpdir/allones -roi 0 $Xsz 0 $Ysz $(($ctrZ-$hfwd)) $tickthick 0 1 $tmpdir/Z_plane -odt char
+
+fslmaths $tmpdir/X_plane -add $tmpdir/Y_plane -add $tmpdir/Z_plane $tmpdir/all_planes -odt char
+
+#__________________________________________________________________________________________#
+# make scale stacks
+tickGap=$(($tickDist - $(($tickthick))))
+
+# X
+fslmaths $tmpdir/allones -Xmean -bin $tmpdir/X_slc -odt char
+fslmaths $tmpdir/X_slc -mul 0 $tmpdir/X_blank -odt char
+
+X_stack=""
+
+cslc=$(($ctrX-1))
+
+while [ $cslc -le $Xsz ]
+do
+    for ctick in $(seq 1 $tickthick)
+    do
+        cslc=$(($cslc + 1))
+        if [ $cslc -gt $Xsz ]
+        then
+            break
+        fi
+        X_stack="$X_stack $tmpdir/X_slc"
+    done
+
+    for ctick in $(seq 1 $tickGap)
+    do
+        cslc=$(($cslc + 1))
+        if [ $cslc -gt $Xsz ]
+        then
+            break
+        fi
+        X_stack="$X_stack $tmpdir/X_blank"
+    done
+
+    if [ $cslc -gt $Xsz ]
+    then
+        break
+    fi
+done
+
+cslc=$(($ctrX-1))
+while [ $cslc -ge 0 ]
+do
+    for ctick in $(seq 1 $tickGap)
+    do
+        cslc=$(($cslc - 1))
+        if [ $cslc -lt 0 ]
+        then
+            break
+        fi
+        X_stack="$tmpdir/X_blank $X_stack"
+    done
+
+    for ctick in $(seq 1 $tickthick)
+    do
+        cslc=$(($cslc - 1))
+        if [ $cslc -lt 0 ]
+        then
+            break
+        fi
+        X_stack="$tmpdir/X_slc $X_stack"
+    done
+
+    if [ $cslc -lt 0 ]
+    then
+        break
+    fi
+done
+
+fslmerge -x $tmpdir/X_tickmarks $X_stack
+
+# Y
+fslmaths $tmpdir/allones -Ymean -bin $tmpdir/Y_slc -odt char
+fslmaths $tmpdir/Y_slc -mul 0 $tmpdir/Y_blank -odt char
+
+Y_stack=""
+
+cslc=$(($ctrY-1))
+
+while [ $cslc -le $Ysz ]
+do
+    for ctick in $(seq 1 $tickthick)
+    do
+        cslc=$(($cslc + 1))
+        if [ $cslc -gt $Ysz ]
+        then
+            break
+        fi
+        Y_stack="$Y_stack $tmpdir/Y_slc"
+    done
+
+    for ctick in $(seq 1 $tickGap)
+    do
+        cslc=$(($cslc + 1))
+        if [ $cslc -gt $Ysz ]
+        then
+            break
+        fi
+        Y_stack="$Y_stack $tmpdir/Y_blank"
+    done
+
+    if [ $cslc -gt $Ysz ]
+    then
+        break
+    fi
+done
+
+cslc=$(($ctrY-1))
+while [ $cslc -ge 0 ]
+do
+    for ctick in $(seq 1 $tickGap)
+    do
+        cslc=$(($cslc - 1))
+        if [ $cslc -lt 0 ]
+        then
+            break
+        fi
+        Y_stack="$tmpdir/Y_blank $Y_stack"
+    done
+
+    for ctick in $(seq 1 $tickthick)
+    do
+        cslc=$(($cslc - 1))
+        if [ $cslc -lt 0 ]
+        then
+            break
+        fi
+        Y_stack="$tmpdir/Y_slc $Y_stack"
+    done
+
+    if [ $cslc -lt 0 ]
+    then
+        break
+    fi
+done
+
+fslmerge -y $tmpdir/Y_tickmarks $Y_stack
+
+# Z
+fslmaths $tmpdir/allones -Zmean -bin $tmpdir/Z_slc -odt char
+fslmaths $tmpdir/Z_slc -mul 0 $tmpdir/Z_blank -odt char
+
+Z_stack=""
+
+cslc=$(($ctrZ-1))
+
+while [ $cslc -le $Zsz ]
+do
+    for ctick in $(seq 1 $tickthick)
+    do
+        cslc=$(($cslc + 1))
+        if [ $cslc -gt $Zsz ]
+        then
+            break
+        fi
+        Z_stack="$Z_stack $tmpdir/Z_slc"
+    done
+
+    for ctick in $(seq 1 $tickGap)
+    do
+        cslc=$(($cslc + 1))
+        if [ $cslc -gt $Zsz ]
+        then
+            break
+        fi
+        Z_stack="$Z_stack $tmpdir/Z_blank"
+    done
+
+    if [ $cslc -gt $Zsz ]
+    then
+        break
+    fi
+done
+
+cslc=$(($ctrZ-1))
+while [ $cslc -ge 0 ]
+do
+    for ctick in $(seq 1 $tickGap)
+    do
+        cslc=$(($cslc - 1))
+        if [ $cslc -lt 0 ]
+        then
+            break
+        fi
+        Z_stack="$tmpdir/Z_blank $Z_stack"
+    done
+
+    for ctick in $(seq 1 $tickthick)
+    do
+        cslc=$(($cslc - 1))
+        if [ $cslc -lt 0 ]
+        then
+            break
+        fi
+        Z_stack="$tmpdir/Z_slc $Z_stack"
+    done
+
+    if [ $cslc -lt 0 ]
+    then
+        break
+    fi
+done
+
+fslmerge -z $tmpdir/Z_tickmarks $Z_stack
+
+#__________________________________________________________________________________________#
+fslmaths $tmpdir/all_planes -add $tmpdir/X_tickmarks -add $tmpdir/Y_tickmarks -add $tmpdir/Z_tickmarks -bin $tmpdir/scale_planes -odt char
+
+fslmaths $tmpdir/X_tickmarks -roi 0 $Xsz \
+                                  $(($ctrY-$ticklen)) $((1+2*$ticklen))  \
+                                  0 $Zsz \
+                                  0 1 $tmpdir/sag_X_tick -odt char
+
+fslmaths $tmpdir/X_tickmarks -roi 0 $Xsz \
+                                  0 $Ysz \
+                                  $(($ctrZ-$ticklen)) $((1+2*$ticklen)) \
+                                  0 1 $tmpdir/cor_X_tick -odt char
+
+fslmaths $tmpdir/Y_tickmarks -roi $(($ctrX-$ticklen)) $((1+2*$ticklen)) \
+                                  0 $Ysz \
+                                  0 $Zsz \
+                                  0 1 $tmpdir/sag_Y_tick  -odt char
+
+fslmaths $tmpdir/Y_tickmarks -roi 0 $Xsz \
+                                  0 $Ysz \
+                                  $(($ctrZ-$ticklen))  $((1+2*$ticklen)) \
+                                  0 1 $tmpdir/tra_Y_tick -odt char
+
+fslmaths $tmpdir/Z_tickmarks -roi $(($ctrX-$ticklen)) $((1+2*$ticklen)) \
+                                  0 $Ysz \
+                                  0  $Zsz \
+                                  0 1 $tmpdir/cor_Z_tick -odt char
+
+fslmaths $tmpdir/Z_tickmarks -roi 0 $Xsz  \
+                                  $(($ctrY-$ticklen)) $((1+2*$ticklen)) \
+                                  0 $Zsz \
+                                  0 1 $tmpdir/tra_Z_tick -odt char
+
+# create grid
+fslmaths $tmpdir/X_tickmarks -add $tmpdir/Y_tickmarks -bin ${ofl}_grid_sag -odt char
+fslmaths $tmpdir/X_tickmarks -add $tmpdir/Z_tickmarks -bin ${ofl}_grid_cor -odt char
+fslmaths $tmpdir/Y_tickmarks -add $tmpdir/Z_tickmarks -bin ${ofl}_grid_tra -odt char
+
+# create tick scales for each of the three dimensions
+fslmaths $tmpdir/X_plane -add $tmpdir/Y_plane \
+    -add $tmpdir/sag_X_tick -add $tmpdir/sag_Y_tick -bin ${ofl}_scale_sag -odt char
+
+fslmaths $tmpdir/X_plane -add $tmpdir/Z_plane \
+    -add $tmpdir/cor_X_tick -add $tmpdir/cor_Z_tick -bin ${ofl}_scale_cor -odt char
+
+fslmaths $tmpdir/Y_plane -add $tmpdir/Z_plane \
+    -add $tmpdir/tra_Y_tick -add $tmpdir/tra_Z_tick -bin ${ofl}_scale_tra -odt char
+
+#__________________________________________________________________________________________#
+if [ $keep_tmp -eq 0 ]
+then
+    rm -r $tmpdir
+fi
+

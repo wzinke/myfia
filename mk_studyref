@@ -150,6 +150,26 @@ do
     esac
 done
 
+
+#__________________________________________________________________________________________#
+# quick fix for a bug
+CorrMat(){
+    infile="${1:-/dev/stdin}"
+
+    echo -n "" > tmp_mat
+
+    while read line; do
+
+        for number in $line; do
+            printf "%f " "$number" >> tmp_mat
+        done
+        echo  >> tmp_mat
+    done < $infile
+
+    mv tmp_mat $infile
+}
+
+
 #__________________________________________________________________________________________#
 tmpdir=$(basename $outnm)
 tmpdir=$(echo $tmpdir | cut -d'.' -f1)
@@ -379,7 +399,15 @@ do
         cnt=$(($cnt+1))
     done
 
-    condor_waitend "$Csbmt_fl $Tsbmt_fl $Nsbmt_fl" $loc_flag
+    condor_waitend "$Csbmt_fl" $loc_flag
+
+    # quick fix of mat files
+    for cmatfl in $matlst
+    do
+        CorrMat $cmatfl
+    done
+
+    condor_waitend "$Tsbmt_fl $Nsbmt_fl" $loc_flag
 
     fslmaths  $maskstr ${tmpdir}/TS_itr${i}_vxlcnt
     fslmaths  $sumstr -div ${tmpdir}/TS_itr${i}_vxlcnt -inm 1000 ${tmpdir}/TS_itr${i}_mean
@@ -423,6 +451,8 @@ then
 
     flirt -in ${tmpdir}/TS_itr${i}_mean -ref $reffl  -coarsesearch 18 -finesearch 6 -omat ${tmpdir}/final/final_2.mat  $searchtol -dof $dof $betstr -o ${tmpdir}/final_mean
 
+    CorrMat ${tmpdir}/final/final_2.mat
+
     # flirt -in ${tmpdir}/TS_itr${i}_mean -ref $reffl  -coarsesearch 18 -finesearch 6 -omat ${tmpdir}/final/final_1.mat $searchtol -dof $dof $betstr
     # flirt -in ${tmpdir}/TS_itr${i}_mean -ref $reffl  -coarsesearch 18 -finesearch 6 -omat ${tmpdir}/final/final_2.mat $searchtol -dof $dof $betstr  -init ${tmpdir}/final/final_1.mat -o ${tmpdir}/final_mean
 
@@ -439,17 +469,19 @@ then
     for curr_mat in $matlst
     do
         vcnt=$((cnt+1))
+
         convert_xfm -omat ${tmpdir}/final/vol_${vcnt}.mat -concat $curr_mat ${tmpdir}/final/final_2.mat
+        CorrMat ${tmpdir}/final/vol_${vcnt}.mat
 
         echo "arguments = \"-in ${tmpdir}/cvol_itr${i}/cvol_${cnt} -ref $reffl -o ${tmpdir}/final/volr_${cnt} -init ${tmpdir}/final/vol_${vcnt}.mat $flirt_fun_par -applyxfm\"" >> ${tmpdir}/final/coreg.submit
-        echo "error  = ${tmpdir}/final/cvol_${cnt}_\$(Process).e" >> ${tmpdir}/final/coreg.submit
-        echo "output = ${tmpdir}/final/cvol_${cnt}_\$(Process).o" >> ${tmpdir}/final/coreg.submit
+        echo "error  = ${tmpdir}/final/cvol_${cnt}_\$(Process).e"   >> ${tmpdir}/final/coreg.submit
+        echo "output = ${tmpdir}/final/cvol_${cnt}_\$(Process).o"   >> ${tmpdir}/final/coreg.submit
         echo "Queue" >> ${tmpdir}/final/coreg.submit
         echo ""      >> ${tmpdir}/final/coreg.submit
 
         echo "arguments = \"${tmpdir}/final/volr_${cnt} -thr 0  -inm 1000 ${tmpdir}/final/vol_${cnt}\"" >> ${tmpdir}/final/binnorm.submit
-        echo "error  = ${tmpdir}/final/binnorm_cvol_${cnt}_\$(Process).e" >> ${tmpdir}/final/binnorm.submit
-        echo "output = ${tmpdir}/final/binnorm_cvol_${cnt}_\$(Process).o" >> ${tmpdir}/final/binnorm.submit
+        echo "error  =  ${tmpdir}/final/binnorm_cvol_${cnt}_\$(Process).e" >> ${tmpdir}/final/binnorm.submit
+        echo "output =  ${tmpdir}/final/binnorm_cvol_${cnt}_\$(Process).o" >> ${tmpdir}/final/binnorm.submit
         echo "Queue" >> ${tmpdir}/final/binnorm.submit
         echo ""      >> ${tmpdir}/final/binnorm.submit
 
