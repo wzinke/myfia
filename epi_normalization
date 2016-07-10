@@ -71,7 +71,7 @@ do
      -dat)  wrtvals=1
             shift
             ;;
-    -mask)  statopt="$statopt -k $2"
+    -mask)  statopt="-k $2"
             shift 2
             ;;
     -keep)  keep_tmp=1
@@ -107,7 +107,7 @@ then
     if [ $do_mean -eq -1 ]  # use median absolute deviation
     then
         fslmaths ${flnm} -sub $glob_val -abs $tmpdir/medabs
-        glob_scal=`fslstats ${flnm} $statopt`
+        glob_scal=`fslstats $tmpdir/medabs $statopt`
         fslmaths ${flnm} -sub $glob_val -div $glob_scal -mul $normval -add $normval $outnm -odt float
     else
         fslmaths ${flnm} -div $glob_val -mul $normval $outnm -odt float

@@ -29,7 +29,7 @@ if(!is.null(mask)){
 
 img2 = p.adjust(img, method=method) # this returns a vector
 
-# transform to 3D volume again (check for possible dimentsion flips)
+# transform to 3D volume again (check for possible dimension flips)
 oimg = array(img2, dim=dim(img))
 
 # convert to nifti format

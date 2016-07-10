@@ -1,0 +1,119 @@
+#!/bin/bash
+#
+# swap_xy
+#
+# created: 08.07.2016
+# by zinke
+#
+
+Usage() {
+cat << EOF
+
+    Usage: $0 <> [options]
+
+    Often, animal heads in the scanner are oriented in a non standard way
+    and as a result the image dimensions are mis-labeled, flipping then
+    left-right and anterior-posterior axis. This tool is correcting this.
+    Currently, it removes all orientation information stored in the sform
+    or q form.
+
+    !!! USE WITH CARE! POTENTIAL LEFT/RIGHT FLIP !!!
+
+    OPTIONS:
+            -o      name of output file (default overwrites source file)
+            -lr     flip left/right orientation
+            -keep   don't delete temporary files when finished
+
+            ###########################################################
+            ##   (c) wolf zinke (2016) - part of the MaFIA toolbox   ##
+            ##         > MAcaque Functional Image Analysis <         ##
+            ##            Licensed under the MIT license             ##
+            ###########################################################
+
+
+EOF
+exit 1
+
+}
+
+
+#__________________________________________________________________________________________#
+if [ $# -lt 1 ]
+then
+    Usage
+else
+    infl=$1;
+    shift
+fi
+
+#__________________________________________________________________________________________#
+keep_tmp=0
+ofl=$infl
+do_lr_flip=0
+
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+          -o)   ofl=$2
+                shift 2
+                ;;
+         -lr)   do_lr_flip=1
+                shift
+                ;;
+       -keep)   keep_tmp=1
+                shift
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+#__________________________________________________________________________________________#
+
+tmpdir=`tmpnam tmp_swapori`
+rm    $tmpdir
+mkdir $tmpdir
+
+#__________________________________________________________________________________________#
+imcp $infl $tmpdir/srcfl
+infl="$tmpdir/srcfl"
+
+#__________________________________________________________________________________________#
+cSform=$(fslorient -getsform $infl)
+
+xS=$(fslinfo $infl | grep pixdim1 | awk '{print $2}')
+yS=$(fslinfo $infl | grep pixdim2 | awk '{print $2}')
+zS=$(fslinfo $infl | grep pixdim3 | awk '{print $2}')
+tS=$(fslinfo $infl | grep pixdim4 | awk '{print $2}')
+
+#__________________________________________________________________________________________#
+fslorient -setsform -$xS 0   0  -0   \
+                     0   $yS 0   0   \
+                     0   0   $zS 0   \
+                     0   0   0   $tS $infl
+fslorient -setqform -$xS 0   -0  -0  \
+                     0   $yS -0   0  \
+                     0   0   $zS  0  \
+                     0   0   $tS  0  $infl
+
+if [ $do_lr_flip -eq 1 ]
+then
+    echo "CAUTION: Flipping left/right orientation!"
+    fslswapdim $infl -x y z $infl
+fi
+
+#__________________________________________________________________________________________#
+imcp $infl $ofl
+
+
+
+#__________________________________________________________________________________________#
+if [ $keep_tmp -eq 0 ]
+then
+    rm -r $tmpdir
+fi
+
