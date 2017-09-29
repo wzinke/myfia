@@ -27,6 +27,7 @@ cat << EOF
             -nIter      Number of iterations for coregistration (default: 1)
             -betpar     Parameter used for the bet call (default: "-r 30 -f 0.4")
             -rsmpl      resamples volumes to the size of the reference image
+            -schedule   use the specified file as flirt schedule
             -tmp        temporary directory where single 3D files are saved
             -keep       don't delete temporary files when finished
 
@@ -60,6 +61,7 @@ outnm=${flpath}/${flnm}_mc
 dof=12
 rot_tol=6
 do_inmask=0
+do_refmask=0
 do_final=0
 keep_tmp=0
 costfun="corratio"
@@ -72,6 +74,11 @@ do_hdr=0
 numiter=1
 betpar="-f 0.35 -w 0.5"  # -Z
 searchtol="-nosearch"
+refmask='none'
+inmask='none'
+
+schdlstr=""
+
 
 #----------------------------------------------------------------------#
 # get options
@@ -88,6 +95,7 @@ do
                 shift 2
                 ;;
     -refmask)   refmask=$2
+                do_refmask=1
                 shift 2
                 ;;
      -inmask)   inmask=$2
@@ -122,6 +130,9 @@ do
                 shift 2
                 ;;
      -betpar)   betpar="$2"
+                shift 2
+                ;;
+     -schedule) schdlstr="-schedule $2"
                 shift 2
                 ;;
        -keep)   keep_tmp=1
@@ -195,6 +206,8 @@ then
 #         imcp ${reffl}_mask ${tmpdir}/refmask
 else
     case $refmask in
+        none)   fslmaths $reffl -bin $refweight -odt char
+                ;;
         thr)    fslmaths $reffl -thrP $mask_thr -bin $refweight -odt char
                 ;;
         bet)    bet2 $reffl ${reffl}_bet -o -m $betpar
@@ -254,18 +267,21 @@ do
 
     if [ $sm_fwhm != 0 ]
     then
-        fslmaths ${tmpdir}/${curr_vol} -s `fwhm2sigma $sm_fwhm`  ${tmpdir}/${curr_vol}
+        fslmaths ${tmpdir}/${curr_vol} -s $(fwhm2sigma $sm_fwhm) ${tmpdir}/${curr_vol}
     fi
 
     # create a weighning mask for the current input
     if [ $do_inmask -eq 1 ]
     then
         case $inmask in
+            none)   fslmaths ${tmpdir}/${curr_vol} -bin $inweight -odt char
+                    masksfx=$inweight
+                    ;;
             thr)    fslmaths ${tmpdir}/${curr_vol} -thrP $mask_thr -bin $inweight -odt char
-		    masksfx=$inweight
+                    masksfx=$inweight
                     ;;
             bet)    bet2 ${tmpdir}/${curr_vol} ${tmpdir}/${curr_vol}_bet -o -m $betpar
-		    masksfx=${tmpdir}/${curr_vol}_bet_mask
+		            masksfx=${tmpdir}/${curr_vol}_bet_mask
                     ;;
             *)      echo "ERROR: Unknown option <$inmask> for input weightning!"
                     exit
@@ -315,13 +331,13 @@ do
             inmaskstr=""
         fi
 
-        flirt -in ${tmpdir}/${curr_vol} -ref $Fref -omat ${tmpdir}/${flnm}_itr${i}.mat/${curr_vol} $flirt_fun_par $init_par $inmaskstr
+        flirt -in ${tmpdir}/${curr_vol} -ref $Fref -omat ${tmpdir}/${flnm}_itr${i}.mat/${curr_vol} $flirt_fun_par $init_par $inmaskstr $schdlstr
 
         if [ $do_rsmpl -eq 1 ]
         then
-            flirt -in ${tmpdir}/${curr_vol} -ref $reffl -o ${tmpdir}/mc_${curr_vol}_itr${i} -init ${tmpdir}/${flnm}_itr${i}.mat/${curr_vol} -applyxfm $trans_fun_par
+            flirt -in ${tmpdir}/${curr_vol} -ref $reffl -o ${tmpdir}/mc_${curr_vol}_itr${i} -init ${tmpdir}/${flnm}_itr${i}.mat/${curr_vol} -applyxfm $trans_fun_par $schdlstr
         else
-            flirt -in ${tmpdir}/${curr_vol} -ref ${tmpdir}/${curr_vol} -o ${tmpdir}/mc_${curr_vol}_itr${i} -init ${tmpdir}/${flnm}_itr${i}.mat/${curr_vol} -applyxfm $trans_fun_par
+            flirt -in ${tmpdir}/${curr_vol} -ref ${tmpdir}/${curr_vol} -o ${tmpdir}/mc_${curr_vol}_itr${i} -init ${tmpdir}/${flnm}_itr${i}.mat/${curr_vol} -applyxfm $trans_fun_par $schdlstr
         fi
 
         mc_lst="$mc_lst ${tmpdir}/mc_${curr_vol}_itr${i}"
@@ -334,14 +350,16 @@ do
     fslmaths    ${tmpdir}/${flnm}_itr${i} -Tmean ${tmpdir}/${flnm}_itr${i}_mean
 
     case $inmask in
-	thr)    fslmaths ${tmpdir}/${flnm}_itr${i}_mean -thrP $mask_thr -bin $refweight -odt char
-		;;
-	bet)    bet2  ${tmpdir}/${flnm}_itr${i}_mean ${tmpdir}/${flnm}_itr${i}_mean_bet -o -m $betpar
-		imcp ${tmpdir}/${flnm}_itr${i}_mean_bet_mask $refweight
-		;;
-	*)      echo "ERROR: Unknown option <$inmask> for input weightning!"
-		exit
-		;;
+        none)   fslmaths ${tmpdir}/${flnm}_itr${i}_mean -bin $refweight -odt char
+                ;;
+        thr)    fslmaths ${tmpdir}/${flnm}_itr${i}_mean -thrP $mask_thr -bin $refweight -odt char
+                ;;
+        bet)    bet2  ${tmpdir}/${flnm}_itr${i}_mean ${tmpdir}/${flnm}_itr${i}_mean_bet -o -m $betpar
+                imcp ${tmpdir}/${flnm}_itr${i}_mean_bet_mask $refweight
+                ;;
+        *)      echo "ERROR: Unknown option <$inmask> for input weightning!"
+                exit
+                ;;
     esac
     Fref=${tmpdir}/${flnm}_itr${i}_mean
 done
@@ -362,7 +380,7 @@ then
     fi
     flirt_fun_par="$flirt_fun_par -inweight ${tmpdir}/${flnm}_itr${i}_mean_bet_mask"
 
-    flirt -in ${tmpdir}/${flnm}_itr${i}_mean -ref $reffl -omat $tmpdir/final_mean.mat $flirt_fun_par
+    flirt -in ${tmpdir}/${flnm}_itr${i}_mean -ref $reffl -omat $tmpdir/final_mean.mat $flirt_fun_par $schdlstr
 
     declare -a vols=($vol_lst)
     cnt=0
@@ -374,7 +392,7 @@ then
         echo "$cnt    $cvol    $curr_mat    mc2_$cvol"
         convert_xfm -omat $curr_mat -concat $curr_mat $tmpdir/final_mean.mat
 
-        flirt -in $tmpdir/$cvol -ref ${tmpdir}/${flnm}_itr${i}_mean -o $tmpdir/mc2_$cvol -init $curr_mat  -applyxfm $trans_fun_par
+        flirt -in $tmpdir/$cvol -ref ${tmpdir}/${flnm}_itr${i}_mean -o $tmpdir/mc2_$cvol -init $curr_mat  -applyxfm $trans_fun_par $schdlstr
 
         cnt=$(($cnt+1))
 

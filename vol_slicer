@@ -57,15 +57,16 @@ else
 fi
 
 #----------------------------------------------------------------------#
-text2png(){
-    if [ $# -lt 3 ]
-    then
-        ptsz=14
-    else
-        ptsz=$3
-    fi
-    echo "$1" | convert -font Palatino-Bold -background black -pointsize $ptsz -fill LightYellow -trim text:- $2
-}
+# text2png(){
+#     if [ $# -lt 3 ]
+#     then
+#         ptsz=14
+#     else
+#         ptsz=$3
+#     fi
+# #     printf "$1" | convert -font Palatino-Bold -background black -pointsize $ptsz -fill LightYellow -trim text:- $2
+#     convert label:"$1" -font Palatino-Bold -background white -pointsize $ptsz -fill black -negate -trim  $2
+# }
 
 #----------------------------------------------------------------------#
 outnm="${bg_img}_selslc.png"

@@ -54,7 +54,7 @@ do
            shift 2
            ;;
     -pad)  padstr="-zpad 4"
-           shift 
+           shift
            ;;
      -ip)  ipstr="-$2"
            shift 2
@@ -88,6 +88,11 @@ fi
 
 #----------------------------------------------------------------------#
 # convert data to fsl's NIFTI format
+if [ $(imtest $outfl) -eq 1 ]
+then
+    imrm $outfl
+fi
+
 afni2fsl $outfl
 fslcpgeom $flnm  $outfl
 
@@ -95,6 +100,5 @@ fslcpgeom $flnm  $outfl
 # plot motion parameter using R
 if [ $do_plot -eq 1 ]
 then
-    echo "source('$RDIR/mc_plots.r'); mc.plots('${outfl}.par','${outfl}'); q()" | R --vanilla --slave
-    rm Rplots.pdf
+    Rscript --vanilla -e "source('$RDIR/mc_plots.r'); mc.plots('${outfl}.par','${outfl}'); q()" 
 fi

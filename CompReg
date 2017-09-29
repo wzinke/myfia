@@ -9,7 +9,11 @@
 Usage() {
 cat << EOF
 
-    Usage: $0 <> [options]
+    Usage: $0 <bckimg> [refimg] <outimg>
+
+    Dump representative slices as png file for the input image file.
+    If a reference image is specified it will be represented as outline
+    on top of the background image.
 
     OPTIONS:
             -
@@ -20,11 +24,11 @@ cat << EOF
             ##            Licensed under the MIT license             ##
             ###########################################################
 
-
 EOF
 exit 1
 
 }
+
 
 if [ $# -eq 2 ]
 then
@@ -45,24 +49,39 @@ rm $tmpdir
 mkdir $tmpdir
 
 slicer $bckimg $refimg  \
-        -x 0.2 $tmpdir/x1.png -x 0.275 $tmpdir/x2.png -x 0.35 $tmpdir/x3.png -x 0.425 $tmpdir/x4.png -x 0.5 $tmpdir/x5.png  \
-        -y 0.2 $tmpdir/y1.png -y 0.15  $tmpdir/y2.png -y 0.3  $tmpdir/y3.png -y 0.45  $tmpdir/y4.png -y 0.6 $tmpdir/y5.png -y 0.75 $tmpdir/y6.png  \
-        -z 0.2 $tmpdir/z1.png -z 0.15  $tmpdir/z2.png -z 0.3  $tmpdir/z3.png -z 0.45  $tmpdir/z4.png -z 0.6 $tmpdir/z5.png -z 0.75 $tmpdir/z6.png  \
+        -x 0.2   $tmpdir/x1.png -x 0.275 $tmpdir/x2.png -x 0.35 $tmpdir/x3.png \
+        -x 0.425 $tmpdir/x4.png -x 0.5   $tmpdir/x5.png \
+        -y 0.2   $tmpdir/y1.png -y 0.15  $tmpdir/y2.png \
+        -y 0.3   $tmpdir/y3.png -y 0.45  $tmpdir/y4.png \
+        -y 0.6   $tmpdir/y5.png -y 0.75  $tmpdir/y6.png \
+        -z 0.2   $tmpdir/z1.png -z 0.15  $tmpdir/z2.png \
+        -z 0.3   $tmpdir/z3.png -z 0.45  $tmpdir/z4.png \
+        -z 0.6   $tmpdir/z5.png -z 0.75  $tmpdir/z6.png \
 
-pngappend  $tmpdir/x1.png + $tmpdir/x2.png + $tmpdir/x3.png + $tmpdir/x4.png + $tmpdir/x5.png \
-         - $tmpdir/y1.png + $tmpdir/y2.png + $tmpdir/y3.png + $tmpdir/y4.png + $tmpdir/y5.png + $tmpdir/y6.png \
-         - $tmpdir/z1.png + $tmpdir/z2.png + $tmpdir/z3.png + $tmpdir/z4.png + $tmpdir/z5.png + $tmpdir/z6.png $tmpdir/Bckimg.png
+pngappend  $tmpdir/x1.png + $tmpdir/x2.png + $tmpdir/x3.png \
+         + $tmpdir/x4.png + $tmpdir/x5.png \
+         - $tmpdir/y1.png + $tmpdir/y2.png + $tmpdir/y3.png \
+         + $tmpdir/y4.png + $tmpdir/y5.png + $tmpdir/y6.png \
+         - $tmpdir/z1.png + $tmpdir/z2.png + $tmpdir/z3.png \
+         + $tmpdir/z4.png + $tmpdir/z5.png + $tmpdir/z6.png $tmpdir/Bckimg.png
 
 if [ $# -gt 2 ]
 then
     slicer $refimg $bckimg   \
-        -x 0.2 $tmpdir/x1.png -x 0.275 $tmpdir/x2.png -x 0.35 $tmpdir/x3.png -x 0.425 $tmpdir/x4.png -x 0.5 $tmpdir/x5.png  \
-        -y 0.2 $tmpdir/y1.png -y 0.15  $tmpdir/y2.png -y 0.3  $tmpdir/y3.png -y 0.45  $tmpdir/y4.png -y 0.6 $tmpdir/y5.png -y 0.75 $tmpdir/y6.png  \
-        -z 0.2 $tmpdir/z1.png -z 0.15  $tmpdir/z2.png -z 0.3  $tmpdir/z3.png -z 0.45  $tmpdir/z4.png -z 0.6 $tmpdir/z5.png -z 0.75 $tmpdir/z6.png  \
+        -x 0.2   $tmpdir/x1.png -x 0.275 $tmpdir/x2.png -x 0.35 $tmpdir/x3.png \
+        -x 0.425 $tmpdir/x4.png -x 0.5   $tmpdir/x5.png \
+        -y 0.2   $tmpdir/y1.png -y 0.15  $tmpdir/y2.png \
+        -y 0.3   $tmpdir/y3.png -y 0.45  $tmpdir/y4.png \
+        -y 0.6   $tmpdir/y5.png -y 0.75  $tmpdir/y6.png \
+        -z 0.2   $tmpdir/z1.png -z 0.15  $tmpdir/z2.png \
+        -z 0.3   $tmpdir/z3.png -z 0.45  $tmpdir/z4.png \
+        -z 0.6   $tmpdir/z5.png -z 0.75  $tmpdir/z6.png \
 
-    pngappend    $tmpdir/x1.png + $tmpdir/x2.png + $tmpdir/x3.png + $tmpdir/x4.png + $tmpdir/x5.png \
-               - $tmpdir/y1.png + $tmpdir/y2.png + $tmpdir/y3.png + $tmpdir/y4.png + $tmpdir/y5.png + $tmpdir/y6.png \
-               - $tmpdir/z1.png + $tmpdir/z2.png + $tmpdir/z3.png + $tmpdir/z4.png + $tmpdir/z5.png + $tmpdir/z6.png  $tmpdir/Refimg.png
+    pngappend $tmpdir/x1.png + $tmpdir/x2.png + $tmpdir/x3.png + $tmpdir/x4.png + $tmpdir/x5.png \
+            - $tmpdir/y1.png + $tmpdir/y2.png + $tmpdir/y3.png \
+            + $tmpdir/y4.png + $tmpdir/y5.png + $tmpdir/y6.png \
+            - $tmpdir/z1.png + $tmpdir/z2.png + $tmpdir/z3.png \
+            + $tmpdir/z4.png + $tmpdir/z5.png + $tmpdir/z6.png  $tmpdir/Refimg.png
 
     pngappend $tmpdir/Bckimg.png - $tmpdir/Refimg.png  $outimg
 else

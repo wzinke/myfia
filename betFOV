@@ -11,8 +11,8 @@ cat << EOF
 
     Usage: $0 <flnm> [options]
 
-    Ad hoc hack to run bet on data that contain a limitted number of slices as FOV.
-    This hack might also be the recipie to improve results with brains that are
+    Ad hoc hack to run bet on data that contain a limited number of slices as FOV.
+    This hack might also be the recipe to improve results with brains that are
     less of a spherical shape.
 
     OPTIONS:
@@ -22,6 +22,7 @@ cat << EOF
 	  -g <g>      vertical gradient in fractional intensity threshold (-1->1); default=0;
 		      positive values give larger brain outline at bottom, smaller at top
 	  -thr <thr>  Apply robust threshold at this percentage level.
+	  -par <betpar> pass these parameters to the bet call
 	  -keep       don't delete temporary files when finished
 
 
@@ -55,6 +56,7 @@ g=0
 thr=0
 keep_tmp=0
 onm="${flnm}_brain"
+betpar=""
 
 while [ $# -gt 0 ] ;
 do
@@ -69,6 +71,9 @@ do
                 shift 2
                 ;;
         -thr)   thr=$2
+                shift 2
+                ;;
+        -par)   betpar=$2
                 shift 2
                 ;;
         -keep)  keep_tmp=1
@@ -124,7 +129,7 @@ newZ=$(echo "$Zdim * ($maxSz/$Zsz)" | bc -l)
 fslchpixdim $tmpdir/inputfile $newX $newY $newZ > /dev/null
 
 # run bet on rescaled image
-bet $tmpdir/inputfile $tmpdir/inputfile_brain -f $f -g $g -o -m
+bet $tmpdir/inputfile $tmpdir/inputfile_brain -f $f -g $g -o -m $betpar
 
 # copy original header to the resulting files
 fslcpgeom $flnm  $tmpdir/inputfile_brain

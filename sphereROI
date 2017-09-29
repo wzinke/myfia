@@ -14,7 +14,7 @@ cat << EOF
 
     Usage: $0 <coor> <radius> [options]
 
-        create a spherical sphere with given radius centered at the voxel
+        create a spherical ROI with given radius centered at the voxel
         specified by coor as 'x y z'
         If radius is 0, only a single voxel is selected.
 
@@ -131,6 +131,7 @@ then
 
     echo "ROI centered at Voxel: $vc"
 fi
+
 
 if [ $do_trans -eq 1 ]
 then

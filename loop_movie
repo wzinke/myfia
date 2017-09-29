@@ -11,7 +11,7 @@ cat << EOF
     OPTIONS:
             -out                      filename of movie file
             -x/-y/-z                  animate 3D volume by looping through the specified axis
-            -tx/-ty/-tz <slcno>       make a movie accross time for the specified slices
+            -tx/-ty/-tz <slcno>       make a movie across time for the specified slices
             -roi <startpos> <numvol>  extract a subsample of the timeseries/volume
             -inv                      inverse the slice looping (descending)
             -s  <scale>

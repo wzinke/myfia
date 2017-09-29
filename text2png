@@ -1,0 +1,29 @@
+#!/bin/bash
+#
+# text2png
+#
+# created: 02.10.2016
+# by zinke
+#
+
+Usage() {
+cat << EOF
+
+    Usage: text2png <text> <outimg> [pointsize]
+
+EOF
+    exit 1
+}
+
+
+    if [ $# -lt 3 ]
+    then
+        ptsz=12
+    else
+        ptsz=$3
+    fi
+#     printf "$1" | convert -font Palatino-Bold -background black -pointsize $ptsz -fill LightYellow -trim text:- $2
+    convert label:"$1" -font Palatino-Bold -background white -pointsize $ptsz -fill black -negate -trim $2
+
+
+

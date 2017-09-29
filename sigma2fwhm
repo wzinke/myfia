@@ -14,7 +14,8 @@ else
 #   str=`echo "ccalc -eval '$1 * sqrt(8*log(2))'"`
 #   eval "$str"
 
-  octcalc "$1 * sqrt(8*log(2))"
+  #octcalc "$1 * sqrt(8*log(2))"
+  Rscript -e "round($1 * sqrt(8*log(2)),4)"  --vanilla | cut -d] -f2
 
 fi
 

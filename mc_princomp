@@ -5,42 +5,59 @@
 Usage() {
 cat << EOF
 
-    Usage: $0 <par_fl> <out_fl> <grpnorm>
+    Usage: $0 <par_fl> <out_fl> [grpnorm] [rotonly]
 
-           Reads in a file with parameters from motion correctionand uses these for a Principle Component Analysis
-	   Results are saved as EPS image as well as text file.
-	   Additional, the first four PC are saved as event files to be used as Regressors of no interest.
+       Reads in a file with parameters from motion correction and uses these for a Principle Component Analysis
+       Results are saved as EPS image as well as text file.
+       Additional, the first four PC are saved as event files to be used as Regressors of no interest.
 
-	   if <grpnorm> is set to 1 (default is 0), motion parameter are normalized using the mad() calculated over
-	                all three (xyz) parameter instead doing this on each parameter.
+       OPTIONS:
+            -o        name of condor submit file
+            -gn       motion parameter are normalized using the mad() calculated over
+                      all three (xyz) parameter instead doing this on each parameter.
+            -dof <n>  use only the first <n> columns
+
 
 EOF
 exit 1
 }
 
-#----------------------------------------------------------------------#
 if [ $# -lt 1 ]
 then
     Usage
 else
     par_fl=$1
+    shift 1
 fi
 
-if [ $# -lt 2 ]
-then
-    outfl=${par_fl}
-else
-    outfl=$2
-fi
+#----------------------------------------------------------------------#
+outfl=${par_fl}
+grpnorm=0
+nDOF="NA"
 
-if [ $# -lt 3 ]
-then
-    grpnorm=0
-else
-    grpnorm=$3
-fi
+while [ $# -gt 0 ] ;
+do
+    case $1 in
+          -o)   outfl=$2
+                shift 2
+                ;;
+         -gn)   grpnorm=1
+                shift 1
+                ;;
+        -dof)   nDOF=$2
+                shift 2
+                ;;
+          -*)   echo "Wrong option: <$1>"
+                echo ""
+                Usage
+                ;;
+           *)   break
+                ;;
+    esac
+done
+
+#----------------------------------------------------------------------#
 
 pdir=`dirname $(which $0)`
 
-echo "source('$pdir/mcpar_decomp.r'); mc.princomp('${par_fl}','${outfl}','${grpnorm}'); q()" | R --vanilla --slave
-rm Rplots.pdf
+Rscript -e  "source('$pdir/mcpar_decomp.r'); mc.princomp('${par_fl}', flout='${outfl}',grpnrm=${grpnorm}, nDOF=$nDOF);" --vanilla

@@ -1,12 +1,13 @@
-# flin='scan_10_pre_slc_mc.par'
-# flout='scan_10_pre_slc_mc'
-
-mc.princomp = function(flin,flout,grpnrm)
+mc.princomp = function(flin, flout=NA, grpnrm=0, nDOF=NA)
 {
+
 	dt = read.table(flin)
 	attach(dt)
 	nvol=length(V1)
 
+	if(is.na(flout)) { flout = flin }
+	if(is.na(nDOF))  { nDOF  = length(dt) }
+	
 # normalize parameter to give them comparable impact
 	if(grpnrm == 0) {
 		V1 = (V1 - median(V1)) / mad(c(V1))
@@ -15,9 +16,7 @@ mc.princomp = function(flin,flout,grpnrm)
 		V4 = (V4 - median(V4)) / mad(c(V4))
 		V5 = (V5 - median(V5)) / mad(c(V5))
 		V6 = (V6 - median(V6)) / mad(c(V6))
-	}
-
-	if(grpnrm == 1) {
+	}else{
 		V1 = (V1 - median(V1)) / mad(c(V1,V2,V3))
 		V2 = (V2 - median(V2)) / mad(c(V1,V2,V3))
 		V3 = (V3 - median(V3)) / mad(c(V1,V2,V3))
@@ -25,7 +24,8 @@ mc.princomp = function(flin,flout,grpnrm)
 		V5 = (V5 - median(V5)) / mad(c(V4,V5,V6))
 		V6 = (V6 - median(V6)) / mad(c(V4,V5,V6))
 	}
-	if(length(dt) == 14) {
+
+	if(length(dt) >= 12 & nDOF > 6) {
 
 		if(grpnrm == 0) {
 			V7 =  (V7  - median(V7))  / mad(c(V7))
@@ -34,9 +34,7 @@ mc.princomp = function(flin,flout,grpnrm)
 			V10 = (V10 - median(V10)) / mad(c(V10))
 			V11 = (V11 - median(V11)) / mad(c(V11))
 			V12 = (V12 - median(V12)) / mad(c(V12))
-		}
-
-		if(grpnrm == 1) {
+		}else{
 			V7 =  (V7  - median(V7))  / mad(c(V7,V8,V9))
 			V8  = (V8  - median(V8))  / mad(c(V7,V8,V9))
 			V9  = (V9  - median(V9))  / mad(c(V7,V8,V9))
@@ -46,16 +44,17 @@ mc.princomp = function(flin,flout,grpnrm)
 		}
 
 		dtf=data.frame(V1,V2,V3,V4,V5,V6,V7,V8,V9,V10,V11,V12)   # skip last two entries
-	}
 
-	if(length(dt) == 6) {
+	}else{
 		dtf=data.frame(V1,V2,V3,V4,V5,V6)
 	}
+
 
 # run PCA
 	pdtf=princomp(dtf,cor=F)
 	pcobj=pdtf$scores
-
+	
+	
 # plot components
 	postscript(file=paste(flout,'_PC.eps',sep=''),paper='a4')
 
@@ -83,7 +82,5 @@ mc.princomp = function(flin,flout,grpnrm)
 	write.table(pcobj[,2], file = paste(flout,'_PC2.ev',sep=''),sep = " ",row.names=F,col.names=F)
 	write.table(pcobj[,3], file = paste(flout,'_PC3.ev',sep=''),sep = " ",row.names=F,col.names=F)
 	write.table(pcobj[,4], file = paste(flout,'_PC4.ev',sep=''),sep = " ",row.names=F,col.names=F)
-
-	detach(dt)
 }
 

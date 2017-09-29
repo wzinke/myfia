@@ -108,6 +108,7 @@ fslmaths $tmpdir/X_plane -add $tmpdir/Y_plane -add $tmpdir/Z_plane $tmpdir/all_p
 # make scale stacks
 tickGap=$(($tickDist - $(($tickthick))))
 
+#__________________________________________________________________________________________#
 # X
 fslmaths $tmpdir/allones -Xmean -bin $tmpdir/X_slc -odt char
 fslmaths $tmpdir/X_slc -mul 0 $tmpdir/X_blank -odt char
@@ -175,6 +176,7 @@ done
 
 fslmerge -x $tmpdir/X_tickmarks $X_stack
 
+#__________________________________________________________________________________________#
 # Y
 fslmaths $tmpdir/allones -Ymean -bin $tmpdir/Y_slc -odt char
 fslmaths $tmpdir/Y_slc -mul 0 $tmpdir/Y_blank -odt char
@@ -242,6 +244,7 @@ done
 
 fslmerge -y $tmpdir/Y_tickmarks $Y_stack
 
+#__________________________________________________________________________________________#
 # Z
 fslmaths $tmpdir/allones -Zmean -bin $tmpdir/Z_slc -odt char
 fslmaths $tmpdir/Z_slc -mul 0 $tmpdir/Z_blank -odt char
@@ -334,18 +337,13 @@ fslmaths $tmpdir/Y_tickmarks -roi 0 $Xsz \
 
 fslmaths $tmpdir/Z_tickmarks -roi $(($ctrX-$ticklen)) $((1+2*$ticklen)) \
                                   0 $Ysz \
-                                  0  $Zsz \
+                                  0 $Zsz \
                                   0 1 $tmpdir/cor_Z_tick -odt char
 
 fslmaths $tmpdir/Z_tickmarks -roi 0 $Xsz  \
                                   $(($ctrY-$ticklen)) $((1+2*$ticklen)) \
                                   0 $Zsz \
                                   0 1 $tmpdir/tra_Z_tick -odt char
-
-# create grid
-fslmaths $tmpdir/X_tickmarks -add $tmpdir/Y_tickmarks -bin ${ofl}_grid_sag -odt char
-fslmaths $tmpdir/X_tickmarks -add $tmpdir/Z_tickmarks -bin ${ofl}_grid_cor -odt char
-fslmaths $tmpdir/Y_tickmarks -add $tmpdir/Z_tickmarks -bin ${ofl}_grid_tra -odt char
 
 # create tick scales for each of the three dimensions
 fslmaths $tmpdir/X_plane -add $tmpdir/Y_plane \
@@ -356,6 +354,15 @@ fslmaths $tmpdir/X_plane -add $tmpdir/Z_plane \
 
 fslmaths $tmpdir/Y_plane -add $tmpdir/Z_plane \
     -add $tmpdir/tra_Y_tick -add $tmpdir/tra_Z_tick -bin ${ofl}_scale_tra -odt char
+
+# create grid
+fslmaths $tmpdir/X_tickmarks -add $tmpdir/Y_tickmarks -bin -add ${ofl}_scale_sag \
+         -add ${ofl}_scale_sag ${ofl}_grid_sag
+fslmaths $tmpdir/X_tickmarks -add $tmpdir/Z_tickmarks -bin -add ${ofl}_scale_cor \
+         -add ${ofl}_scale_cor ${ofl}_grid_cor
+fslmaths $tmpdir/Y_tickmarks -add $tmpdir/Z_tickmarks -bin -add ${ofl}_scale_tra \
+         -add ${ofl}_scale_tra ${ofl}_grid_tra 
+
 
 #__________________________________________________________________________________________#
 if [ $keep_tmp -eq 0 ]
