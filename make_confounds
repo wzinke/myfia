@@ -12,7 +12,7 @@ cat << EOF
 
     OPTIONS:
             -out    name of output file - supresses output to screen.
-            -ts     list of ascii files with 1 value per volume.
+            -ts     list of ascii files with 1 row of values per volume.
             -pos    list of ascii files that specify confound volumes.
             -vol    Number of volumes - required, if <-ts> is not used.
 
@@ -91,7 +91,7 @@ then
             if [ ! $cvol -eq  $ts_vol ]
             then
                 echo ""
-                echo "ERROR: Different number ov volumes ($cvol instead of $ts_vol)!"
+                echo "ERROR: Different number of volumes ($cvol instead of $ts_vol)!"
                 echo "       file: $curr_ts"
                 echo ""
                 exit
@@ -156,19 +156,22 @@ cnt=0
 while [ $cnt -lt $num_vol ]
 do
     curr_line=""
+    cnt=$(($cnt+1))
 
 #----------------------------------------------------------------------#
     if [ $get_ts -eq 1 ]
     then
         for curr_ts in $ts_lst
         do
-            declare -a vals=(`cat $curr_ts`)
-            curr_line="$curr_line ${vals[$cnt]}"
+            vals=$(sed -n "$cnt{p;q}" $curr_ts)
+            curr_line="$curr_line $vals"
+
+           # declare -a vals=(`cat $curr_ts`)
+            #curr_line="$curr_line ${vals[$cnt]}"
         done
     fi
 
 #----------------------------------------------------------------------#
-    cnt=$(($cnt+1))
     if [ $get_pos -eq 1 ]
     then
         for cpos in $all_pos
