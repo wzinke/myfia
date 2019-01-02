@@ -671,6 +671,8 @@ then
             exit
         fi
 
+        echo "+++++"
+        echo "$FSLDIR/bin/slicer $tmpdir/curr_img -s $scl -u -x -$cslc $tmpdir/X_${cslc}.png"
         $FSLDIR/bin/slicer $tmpdir/curr_img -s $scl -u -x -$cslc $tmpdir/X_${cslc}.png
 
         cvxlMM=`echo "($origVXL - $cslc) * $vxlres" | bc -l | awk ' { printf  "%6.2f\n", $0 } ' `
