@@ -8,24 +8,38 @@
 #__________________________________________________________________________________________#
 
 # gzip all nii files in the current directory. Use pigz for parallel processing if available.
+#
+# adding parallel as process managment
+#   O. Tange (2011): GNU Parallel - The Command-Line Power Tool, ;login: The USENIX Magazine, February 2011:42-47.
+
 
 if [ $# -lt 1 ] ; then
-    fllst=`ls -1 *.nii`
+    fllst=$(ls -1 *.nii)
 else
     fllst=$1;
 fi
 
+nprocs=$(grep -c ^processor /proc/cpuinfo 2>/dev/null || sysctl -n hw.ncpu)
+nfiles=$(echo $fllst | wc -w)
+
+$((9/3))
 
 if [ ! ${SGE_ROOT}'x' == 'x' ]
 then
+# use HTCondor or SGE
     for cfl in $fllst
     do
         qrsh "gzip --best -q $cfl" &
     done
 else
-    if hash pigz 2>/dev/null
+    if [ hash parallel 2>/dev/null  ] && [ $nfiles -gt $nprocs ]
     then
-        pigz --best --quiet $fllst
+        parallel --gnu gzip -9 ::: $fllst
+    elif hash pigz 2>/dev/null 
+    then
+        parallel -j $nfiles --gnu pigz -p $(($nprocs / $nfiles)) --best --quiet ::: $fllst
+    
+        #pigz  --best --quiet $fllst
     else
         for cfl in $fllst
         do
