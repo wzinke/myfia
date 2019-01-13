@@ -7,10 +7,16 @@
 #
 
 lst=`ls -1 *.nii*`
-for cfl in $lst
-do
-    if [ `fslnvols $cfl` -eq 1 ]
-    then
-        slice_set $cfl
-    fi
-done
+
+if hash parallel 2>/dev/null
+then
+    parallel  CompReg ::: $lst
+else
+    for cfl in $lst
+    do
+        if [ `fslnvols $cfl` -eq 1 ]
+        then
+            CompReg $cfl
+        fi
+    done
+fi

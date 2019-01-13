@@ -9,7 +9,7 @@
 Usage() {
 cat << EOF
 
-    Usage: $0 <bckimg> [refimg] <outimg>
+    Usage: $0 <bckimg> [refimg] [outimg]
 
     Dump representative slices as png file for the input image file.
     If a reference image is specified it will be represented as outline
@@ -29,8 +29,12 @@ exit 1
 
 }
 
-
-if [ $# -eq 2 ]
+if [ $# -eq 1 ]
+then
+    bckimg=$1
+    refimg=""
+    outimg=$(remove_ext $1).png
+elif [ $# -eq 2 ]
 then
     bckimg=$1
     refimg=""

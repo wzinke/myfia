@@ -19,6 +19,7 @@ cat << EOF
             -i      use isometric voxel size
             -d      specify size for each dimension
             -o      name of the rescaled header file
+            -r      resample image file
 
             ###########################################################
             ##   (c) wolf zinke (2011) - part of the MaFIA toolbox   ##
@@ -58,6 +59,8 @@ rm $tmpfl
 
 #__________________________________________________________________________________________#
 use_ref=0
+do_rsmpl=0
+
 while [ $# -gt 0 ] ;
 do
     case $1 in
@@ -73,6 +76,9 @@ do
                 ;;
           -d)   Xdim=$2 ; Ydim=$3 ; Zdim=$4
                 shift 4
+                ;;
+          -r)   do_rsmpl=1
+                shift
                 ;;
           -o)   ofl=$2
                 shift 2
@@ -99,19 +105,10 @@ Xcnt=`echo "$fovX / $Xdim + 0.5" | bc -l | xargs printf "%1.0f"`
 Ycnt=`echo "$fovY / $Ydim + 0.5" | bc -l | xargs printf "%1.0f"`
 Zcnt=`echo "$fovZ / $Zdim + 0.5" | bc -l | xargs printf "%1.0f"`
 
-# if [ $use_ref -eq 0 ]
-# then
-   fslcreatehd $Xcnt $Ycnt $Zcnt 1 $Xdim $Ydim $Zdim 1 0 0 0 16  $ofl
-# else
-#     fslhd -x $reffl > $tmpfl
-#     sethdval $tmpfl nx $Xcnt
-#     sethdval $tmpfl ny $Ycnt
-#     sethdval $tmpfl nz $Zcnt
-# #     sethdval $tmpfl header_filename `basename ${ofl}.nii.gz`
-# #     sethdval $tmpfl  image_filename `basename ${ofl}.nii.gz`
-# #     sethdval $tmpfl dx $Xdim
-# #     sethdval $tmpfl dy $Ydim
-# #     sethdval $tmpfl dz $Zdim
-#     fslcreatehd  $tmpfl $ofl
-#  rm $tmpfl
-# fi
+fslcreatehd $Xcnt $Ycnt $Zcnt 1 $Xdim $Ydim $Zdim 1 0 0 0 16  $ofl
+
+if [ $do_rsmpl -eq 1 ]
+then
+    flirt -in $flnm -init $FSLDIR/etc/flirtsch/ident.mat -ref $ofl -o ${ofl}_tmp -applyxfm
+    immv ${ofl}_tmp ${ofl}
+fi
