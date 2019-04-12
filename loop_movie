@@ -13,6 +13,7 @@ cat << EOF
             -x/-y/-z                  animate 3D volume by looping through the specified axis
             -tx/-ty/-tz <slcno>       make a movie across time for the specified slices
             -roi <startpos> <numvol>  extract a subsample of the timeseries/volume
+            -int <min> <max>          Intensity range specified as minimum and maximum intensity
             -inv                      inverse the slice looping (descending)
             -s  <scale>
             -delay                    time delay between frames
@@ -56,6 +57,8 @@ scl=2
 tmdel=10
 vdim=""
 slcsel=""
+intstr=""
+
 
 # get options
 while [ $# -gt 0 ] ;
@@ -104,6 +107,9 @@ do
    -roi)   svol=$2
            volwidth=$3
            do_roi=1
+           shift 3
+           ;;
+   -int)   intstr="-i $2 $3"
            shift 3
            ;;
   -delay)  tmdel=$2
@@ -230,7 +236,7 @@ then
 
         echo -n "$cnt  "
 
-        slicer $fnm -u -s $scl -$vdim -1 $tmpdir/splitvol/imgdt_$cntstr.png
+        slicer $fnm -u -s $scl $intstr -$vdim -1 $tmpdir/splitvol/imgdt_$cntstr.png
         convert $tmpdir/splitvol/imgdt_$cntstr.png $tmpdir/imgdata/imgdt_$cntstr.gif
         cnt=$(($cnt+$stepval))
     done
