@@ -55,7 +55,7 @@ mkdir $tmpdir
 slicer $bckimg $refimg  \
         -x 0.2   $tmpdir/x1.png -x 0.275 $tmpdir/x2.png -x 0.35 $tmpdir/x3.png \
         -x 0.425 $tmpdir/x4.png -x 0.5   $tmpdir/x5.png \
-        -y 0.2   $tmpdir/y1.png -y 0.15  $tmpdir/y2.png \
+        -y 0.15  $tmpdir/y1.png -y 0.2   $tmpdir/y2.png \
         -y 0.3   $tmpdir/y3.png -y 0.45  $tmpdir/y4.png \
         -y 0.6   $tmpdir/y5.png -y 0.75  $tmpdir/y6.png \
         -z 0.15  $tmpdir/z1.png -z 0.2   $tmpdir/z2.png \
@@ -74,7 +74,7 @@ then
     slicer $refimg $bckimg   \
         -x 0.2   $tmpdir/x1.png -x 0.275 $tmpdir/x2.png -x 0.35 $tmpdir/x3.png \
         -x 0.425 $tmpdir/x4.png -x 0.5   $tmpdir/x5.png \
-        -y 0.2   $tmpdir/y1.png -y 0.15  $tmpdir/y2.png \
+        -y 0.15  $tmpdir/y1.png -y 0.2   $tmpdir/y2.png \
         -y 0.3   $tmpdir/y3.png -y 0.45  $tmpdir/y4.png \
         -y 0.6   $tmpdir/y5.png -y 0.75  $tmpdir/y6.png \
         -z 0.15  $tmpdir/z1.png -z 0.2   $tmpdir/z2.png \
